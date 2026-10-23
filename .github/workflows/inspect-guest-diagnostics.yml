@@ -1,0 +1,26 @@
+name: Inspect guest acceptance diagnostics
+
+on:
+  push:
+    branches:
+      - arena/5befbcf9-cvephp
+    paths:
+      - '.github/workflows/inspect-guest-diagnostics.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: cyber-range-guest-acceptance
+          run-id: 40008427390
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: /tmp/guest-diagnostics
+      - name: Print Playwright error contexts
+        run: |
+          find /tmp/guest-diagnostics -type f -name 'error-context.md' -print -exec sh -c 'echo "--- $1"; cat "$1"' _ {} \;
+          find /tmp/guest-diagnostics -type f -name '*.log' -print -exec sh -c 'echo "--- $1"; tail -200 "$1"' _ {} \;
