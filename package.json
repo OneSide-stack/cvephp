@@ -16,6 +16,7 @@
     "test:guest": "python3 -m unittest discover -s image-build/tests -p 'test_*.py'",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:guest": "playwright test --config playwright.guest.config.ts",
     "lint": "tsc -b --pretty false",
     "assets:runtime": "node scripts/prepare-runtime.mjs",
     "assets:verify": "node scripts/verify-assets.mjs",
