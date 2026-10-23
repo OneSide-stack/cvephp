@@ -3,6 +3,7 @@
 description="Enterprise Cyber Range target initialization"
 depend() {
   need localmount
+  provide net
   before apache2
 }
 start() {

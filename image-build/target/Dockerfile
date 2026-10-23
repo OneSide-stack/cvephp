@@ -56,6 +56,7 @@ RUN adduser -D -s /bin/sh lab \
     && for service in hwclock modules sysctl hostname syslog bootmisc; do rc-update add "$service" boot; done \
     && rc-update add killprocs shutdown \
     && rc-update add cyber-range default \
+    && rc-update add apache2 default \
     && cat >/etc/inittab <<'EOF'
 ::sysinit:/sbin/openrc sysinit
 ::sysinit:/sbin/openrc boot

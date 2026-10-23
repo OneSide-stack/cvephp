@@ -33,20 +33,10 @@ chmod 0750 /var/log/apache2
 chown root:apache /var/www/html
 chmod 0775 /var/www/html
 
+# Validate here, then let OpenRC start apache2 after this service. Apache's
+# stock init script requires net, which cyber-range provides only after the
+# static addressing above has really been applied. The browser independently
+# polls the HTTP health endpoint; this setup service must not wait on a daemon
+# that is deliberately ordered after it.
 httpd -t || { echo 'CYBER_RANGE_TARGET_FAILED apache_config'; exit 1; }
-if ! rc-service apache2 start; then
-  tail -n 40 /var/log/apache2/error.log 2>/dev/null || true
-  echo 'CYBER_RANGE_TARGET_FAILED apache_start'
-  exit 1
-fi
-n=0
-while [ "$n" -lt 30 ]; do
-  if wget -q -T 3 -O /tmp/cyber-range-health.json http://127.0.0.1/health.php 2>/dev/null; then break; fi
-  n=$((n+1)); sleep 1
-done
-if grep -q 'apache2handler' /tmp/cyber-range-health.json 2>/dev/null; then
-  echo "CYBER_RANGE_TARGET_READY address=192.168.10.55 apache=running sapi=apache2handler"
-else
-  echo "CYBER_RANGE_TARGET_FAILED apache_or_php_health_check_failed"
-  exit 1
-fi
+echo 'CYBER_RANGE_NETWORK_READY address=192.168.10.55 loopback=127.0.0.1'

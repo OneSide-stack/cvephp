@@ -431,8 +431,11 @@ export class LabController {
       if (machine === "target") this.targetSerialSealed = true;
       this.patchMachine(machine, { status: "ready", detail: restore ? "State restored; guest checks pending" : "Guest boot and local service checks passed" });
     } catch (error) {
-      this.patchMachine(machine, { status: "failed", error: error instanceof Error ? error.message : String(error) });
-      throw error;
+      let detail = error instanceof Error ? error.message : String(error);
+      const serialTail = this.state.machines[machine].serial.slice(-8000).trim();
+      if (serialTail) detail += `\nRecent ${machine} serial output:\n${serialTail}`;
+      this.patchMachine(machine, { status: "failed", error: detail });
+      throw new Error(detail, { cause: error });
     }
   }
 
