@@ -2,7 +2,7 @@
 ARG ALPINE_VERSION=3.22.1
 FROM --platform=linux/386 alpine:${ALPINE_VERSION} AS php-build
 ARG PHP_VERSION=8.2.34
-RUN apk add --no-cache build-base autoconf automake libtool bison re2c apache2-dev libxml2-dev
+RUN apk add --no-cache build-base autoconf automake libtool bison re2c apache2 apache2-dev libxml2-dev
 COPY image-build/downloads/php-${PHP_VERSION}.tar.gz /usr/src/php.tar.gz
 RUN mkdir -p /usr/src/php && tar -xzf /usr/src/php.tar.gz -C /usr/src/php --strip-components=1
 WORKDIR /usr/src/php
