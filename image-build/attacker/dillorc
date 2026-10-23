@@ -1,0 +1,6 @@
+# Dillo uses the real guest proxy for plain HTTP. No Internet exception exists.
+http_proxy=http://127.0.0.1:8080/
+no_proxy=""
+start_page=http://127.0.0.1:8081/
+show_url=yes
+show_extra_warnings=yes

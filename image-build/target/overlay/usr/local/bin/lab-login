@@ -1,0 +1,4 @@
+#!/bin/sh
+export HOME=/home/lab
+cd /home/lab
+exec /bin/login -f lab

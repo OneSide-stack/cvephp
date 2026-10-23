@@ -1,0 +1,99 @@
+#!/bin/sh
+# Guest-backed status, telemetry, logs, provisioning, and RCE evidence checks.
+set -u
+LOGDIR=/var/log/apache2
+PROOF=/var/www/html/rce-proof.txt
+FLAG=/var/www/html/flag.txt
+
+mem_value() { awk -v key="$1" '$1 == key ":" {print $2; exit}' /proc/meminfo; }
+worker_rss() {
+  total=0
+  for pid in $(pidof httpd 2>/dev/null); do
+    rss="$(awk '/^VmRSS:/ {print $2}' "/proc/$pid/status" 2>/dev/null)"
+    total=$((total + ${rss:-0}))
+  done
+  echo "$total"
+}
+worker_count() { set -- $(pidof httpd 2>/dev/null); echo "$#"; }
+memory_bytes() {
+  /usr/local/bin/php -r '$v=ini_get("memory_limit"); if ($v === "-1") {echo -1; exit;} $n=(int)$v; switch (strtolower(substr($v, -1))) {case "g": $n*=1024; case "m": $n*=1024; case "k": $n*=1024;} echo $n;'
+}
+
+case "${1:-status}" in
+  ready)
+    addr="$(ip -4 -o addr show dev eth0 2>/dev/null | awk '{print $4}')"
+    pids="$(pidof httpd 2>/dev/null || true)"
+    health="$(wget -q -T 5 -O - http://127.0.0.1/health.php 2>/dev/null || true)"
+    mode=absent
+    echo "$health" | grep -q '"php_sapi": "apache2handler"' && mode=apache2handler
+    printf '{"machine":"target","os":"Alpine Linux %s","arch":"%s","address":"%s","apache":"%s","php_sapi":"%s","php_version":"%s"}\n' \
+      "$(cat /etc/alpine-release)" "$(uname -m)" "$addr" "$(test -n "$pids" && echo running || echo stopped)" "$mode" "$(/usr/local/bin/php -r 'echo PHP_VERSION;')"
+    [ "$addr" = "192.168.10.55/24" ] && [ -n "$pids" ] && [ "$mode" = apache2handler ] && [ -f "$FLAG" ] && ! grep -q UNPROVISIONED "$FLAG"
+    ;;
+  telemetry)
+    total="$(mem_value MemTotal)"; available="$(mem_value MemAvailable)"
+    pids="$(pidof httpd 2>/dev/null || true)"
+    mode=absent; httpd -M 2>/dev/null | grep -q php_module && mode=mod_php
+    printf '{"timestamp":%s,"guest_mem_total_kib":%s,"guest_mem_available_kib":%s,"guest_mem_used_kib":%s,"apache_worker_count":%s,"apache_modphp_rss_kib":%s,"apache_state":"%s","php_version":"%s","php_sapi":"%s","php_memory_limit":"%s","php_memory_limit_bytes":%s,"php_binary_sha256":"%s"}\n' \
+      "$(date +%s)" "${total:-0}" "${available:-0}" "$((${total:-0} - ${available:-0}))" \
+      "$(worker_count)" "$(worker_rss)" "$(test -n "$pids" && echo running || echo stopped)" \
+      "$(/usr/local/bin/php -r 'echo PHP_VERSION;')" "$mode" \
+      "$(/usr/local/bin/php -r 'echo ini_get("memory_limit");')" "$(memory_bytes)" \
+      "$(sha256sum /usr/lib/apache2/libphp.so | awk '{print $1}')"
+    ;;
+  logs)
+    case "${2:-access}" in
+      access) file=$LOGDIR/access.log ;;
+      error) file=$LOGDIR/error.log ;;
+      php) file=$LOGDIR/php-error.log ;;
+      *) echo 'usage: labctl logs access|error|php' >&2; exit 2 ;;
+    esac
+    printf 'SOURCE=%s\n' "$file"
+    if [ -r "$file" ]; then tail -c 262144 "$file"; else echo "UNREADABLE: $file"; exit 1; fi
+    ;;
+  health)
+    wget -q -T 8 -O - http://127.0.0.1/health.php
+    ;;
+  build)
+    cat /etc/cyber-range/build-info
+    ;;
+  evidence)
+    challenge="${2:-}"
+    [ ${#challenge} -ge 16 ] && [ ${#challenge} -le 128 ] || { echo 'invalid challenge'; exit 2; }
+    [ -f "$PROOF" ] || { printf '{"rce_evidence":false,"reason":"proof file absent"}\n'; exit 1; }
+    owner="$(stat -c '%U' "$PROOF" 2>/dev/null || echo unknown)"
+    mode="$(stat -c '%a' "$PROOF" 2>/dev/null || echo 0)"
+    mtime="$(stat -c '%Y' "$PROOF" 2>/dev/null || echo 0)"
+    start="$(cat /run/cyber-range/session-start 2>/dev/null || echo 0)"
+    content="$(cat "$PROOF" 2>/dev/null || true)"
+    valid=false
+    [ "$owner" = apache ] && [ "$content" = "$challenge" ] && [ "$mtime" -ge "$start" ] && valid=true
+    printf '{"rce_evidence":%s,"owner":"%s","mode":"%s","mtime":%s,"session_start":%s,"path":"%s","challenge_match":%s}\n' \
+      "$valid" "$owner" "$mode" "$mtime" "$start" "$PROOF" "$(test "$content" = "$challenge" && echo true || echo false)"
+    [ "$valid" = true ]
+    ;;
+  provision)
+    [ "$(id -u)" = 0 ] || { echo 'provision requires the boot control context' >&2; exit 1; }
+    flag="${2:-}"; challenge="${3:-}"
+    [ ${#flag} -ge 24 ] && [ ${#flag} -le 160 ] && [ ${#challenge} -ge 16 ] && [ ${#challenge} -le 128 ] || { echo 'invalid provisioning values'; exit 2; }
+    case "$flag$challenge" in *[!A-Za-z0-9_{}-]*) echo 'unsafe provisioning characters'; exit 2;; esac
+    umask 027
+    printf '%s\n' "$flag" >"$FLAG"
+    chown root:apache "$FLAG"; chmod 0640 "$FLAG"
+    printf '%s' "$challenge" >/run/cyber-range/challenge
+    chmod 0600 /run/cyber-range/challenge
+    rm -f "$PROOF"
+    echo 'CYBER_RANGE_FLAG_PROVISIONED'
+    ;;
+  seal)
+    [ "$(id -u)" = 0 ] || { echo 'seal requires root' >&2; exit 1; }
+    # The frontend executes this as the final provisioning action. The current
+    # serial shell becomes an unprivileged user; the visible VGA console is
+    # already unprivileged. No root target shell is presented to the learner.
+    exec /bin/su - lab
+    ;;
+  *)
+    echo 'usage: labctl ready|telemetry|logs|health|build|evidence|provision|seal' >&2
+    exit 2
+    ;;
+esac

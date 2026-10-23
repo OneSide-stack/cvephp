@@ -1,0 +1,34 @@
+ENTERPRISE CYBER RANGE — ATTACKER WORKSTATION
+
+Target: http://192.168.10.55/ (only destination allowed by RangeProxy)
+Login route: http://192.168.10.55/wp-login.php
+Application: custom PHP training portal, NOT WordPress.
+
+REAL TOOLS
+  xterm/aterm       guest shell (use whichever icon is present)
+  dillo             graphical HTTP browser, configured for RangeProxy
+  curl / wget       HTTP clients
+  ip / ping         network diagnostics
+  python3           runs the local proxy and research harness
+  nano / vi         guest text editors
+
+RANGEPROXY
+  Management UI: http://127.0.0.1:8081/
+  HTTP proxy:    127.0.0.1:8080
+  Evidence:      ~/lab-evidence/requests.jsonl
+  It is a purpose-built training proxy, not Burp Suite.
+  Intercept has a 32 MiB request-body cap. Use exploit.py for streamed tests.
+
+TERMINAL EXAMPLES
+  ip addr
+  ping -c 3 192.168.10.55
+  curl --noproxy '*' -I http://192.168.10.55/wp-login.php
+  curl --noproxy '*' -i http://192.168.10.55/
+  python3 ~/exploit.py baseline
+  python3 ~/exploit.py oom-probe --mib 16
+
+CVE RESEARCH LIMIT
+  A PHP version, Content-Length threshold, HTTP 500, or OOM fatal is not RCE.
+  The supplied harness does not contain a verified 32-bit Alpine control-flow
+  profile. Develop/calibrate one independently or use this as an OOM and
+  request-processing investigation. Completion requires target-owned evidence.

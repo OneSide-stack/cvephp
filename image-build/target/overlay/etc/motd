@@ -1,0 +1,10 @@
+Enterprise Cyber Range — Alpine assessment target
+
+You are logged in as the unprivileged 'lab' user. Useful commands:
+  labctl telemetry
+  labctl logs access|error|php
+  labctl health
+  labctl build
+
+The flag is not readable by this account. Apache HTTP access to flag.txt is
+also denied. Do not mistake target-console administration for exploitation.

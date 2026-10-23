@@ -1,0 +1,7 @@
+#!/bin/sh
+# Non-root serial console used for automated checks and optional serial access.
+export HOME=/home/tc
+export USER=tc
+export LOGNAME=tc
+cd /home/tc
+exec /bin/su - tc

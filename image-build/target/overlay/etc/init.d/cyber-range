@@ -1,0 +1,10 @@
+#!/sbin/openrc-run
+# OpenRC wrapper keeps service ordering visible in normal Alpine tooling.
+description="Enterprise Cyber Range target initialization"
+depend() {
+  need localmount
+  before apache2
+}
+start() {
+  /etc/local.d/cyber-range.start
+}

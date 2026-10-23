@@ -1,0 +1,5 @@
+#!/bin/sh
+# Used only on the hidden serial provisioning channel during boot.
+export HOME=/root
+cd /root
+exec /bin/login -f root

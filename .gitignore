@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.vite/
+playwright-report/
+test-results/
+*.log
+.DS_Store
+.image-build-work/
+image-build/downloads/
+public/lab-assets/*.iso
+public/lab-assets/*.img
+public/lab-assets/*.bin.zst
+public/lab-assets/manifest.local.json

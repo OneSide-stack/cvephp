@@ -1,0 +1,9 @@
+{
+  "name": "Enterprise Cyber Range — PHP2Shell",
+  "short_name": "Cyber Range",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090e13",
+  "theme_color": "#090e13",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
