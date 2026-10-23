@@ -16,7 +16,11 @@ if ! command -v python3 >/dev/null 2>&1 && command -v python3.6 >/dev/null 2>&1;
   PY="$(command -v python3)"
 fi
 if [ -n "$PY" ] && ! pidof range_proxy.py >/dev/null 2>&1; then
-  su tc -c "nohup $PY /home/tc/lab/range_proxy.py >/tmp/range-proxy.log 2>&1 &"
+  if [ "$(id -u)" -eq 0 ]; then
+    su tc -c "nohup $PY /home/tc/lab/range_proxy.py >/tmp/range-proxy.log 2>&1 &"
+  else
+    nohup "$PY" /home/tc/lab/range_proxy.py >/tmp/range-proxy.log 2>&1 &
+  fi
 fi
 # Wait for a real bound management socket, not a fixed readiness timer.
 n=0

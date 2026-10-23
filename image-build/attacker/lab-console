@@ -4,4 +4,10 @@ export HOME=/home/tc
 export USER=tc
 export LOGNAME=tc
 cd /home/tc
-exec /bin/su - tc
+# TinyCore may invoke this getty login directly as tc. In that case su is
+# neither needed nor permitted; never turn an already non-root console into a
+# privileged fallback shell.
+if [ "$(id -u)" -eq 0 ]; then
+  exec /bin/su - tc
+fi
+exec /bin/sh -l

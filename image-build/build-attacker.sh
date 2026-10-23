@@ -26,13 +26,24 @@ docker run --rm --platform linux/amd64 \
     cd /work/.image-build-work/attacker/core
     gzip -dc ../iso/boot/core.gz | cpio -idmu >/dev/null 2>&1
   '
-# cpio runs as root in the utility container. Return the extracted tree to the
-# host user and normalize read-only ISO modes before install/sed/cp operations;
-# otherwise existing root-owned or read-only files cannot be replaced on the runner.
+# Only the ISO tree and the specific core paths edited by the host are handed
+# over. Recursively chowning the core would change bin/busybox.suid away from
+# root and break login/su inside the guest. All other base UID/GID/mode metadata
+# remains exactly as shipped by TinyCore.
 docker run --rm --platform linux/amd64 \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$WORK:/work" alpine:3.22.1 \
-  sh -c 'chown -R "$HOST_UID:$HOST_GID" /work/core /work/iso && chmod -R u+rwX /work/core /work/iso'
+  sh -eu -c '
+    chown -R "$HOST_UID:$HOST_GID" /work/iso
+    chmod -R u+rwX /work/iso
+    mkdir -p /work/core/opt /work/core/usr/local/bin /work/core/home/tc
+    chown "$HOST_UID:$HOST_GID" /work/core/etc /work/core/etc/inittab /work/core/opt /work/core/usr/local/bin /work/core/home
+    chown -R "$HOST_UID:$HOST_GID" /work/core/home/tc
+    if [ -e /work/core/opt/bootlocal.sh ]; then chown "$HOST_UID:$HOST_GID" /work/core/opt/bootlocal.sh; fi
+    chmod u+rwX /work/core/etc /work/core/etc/inittab /work/core/opt /work/core/usr/local/bin /work/core/home
+    chmod -R u+rwX /work/core/home/tc
+    if [ -e /work/core/opt/bootlocal.sh ]; then chmod u+rwX /work/core/opt/bootlocal.sh; fi
+  '
 
 CORE="$WORK/core"
 ISO="$WORK/iso"
@@ -57,8 +68,25 @@ EOF
 # Serial is a real guest shell, used for network checks and optional console UI.
 sed -i '/ttyS0/d' "$CORE/etc/inittab"
 echo 'ttyS0::respawn:/sbin/getty -n -l /usr/local/bin/lab-console 115200 ttyS0 vt100' >>"$CORE/etc/inittab"
-chown -R 1000:50 "$CORE/home/tc" 2>/dev/null || true
 chmod 0755 "$CORE/home/tc/.X.d/50-range"
+
+# Restore the handful of edited base paths and assign TinyCore's documented
+# tc account (uid 1001, group staff/50) to its home. Fail before packaging if
+# the root-owned setuid launcher was not preserved.
+docker run --rm --platform linux/amd64 -v "$WORK:/work" alpine:3.22.1 sh -eu -c '
+  chown 0:0 /work/core/etc /work/core/usr/local/bin \
+    /work/core/usr/local/bin/labctl /work/core/usr/local/bin/lab-console
+  chown 0:50 /work/core/etc/inittab /work/core/home /work/core/opt /work/core/opt/bootlocal.sh
+  chown -R 1001:50 /work/core/home/tc
+  chmod 0755 /work/core/etc /work/core/opt/bootlocal.sh \
+    /work/core/usr/local/bin/labctl /work/core/usr/local/bin/lab-console
+  chmod 0664 /work/core/etc/inittab
+  chmod 0775 /work/core/home /work/core/usr/local/bin
+  chmod 2775 /work/core/opt
+  test "$(stat -c %u /work/core/bin/busybox.suid)" = 0
+  test "$(stat -c %a /work/core/bin/busybox.suid)" = 4755
+  test "$(stat -c %u /work/core/home/tc)" = 1001
+'
 
 mkdir -p "$ISO/cde/optional"
 cp -a "$DOWNLOADS/tinycore-packages/"*.tcz "$ISO/cde/optional/"
@@ -70,12 +98,12 @@ cat "$DOWNLOADS/tinycore-packages/onboot-packages.lst" >>"$ISO/cde/onboot.lst"
 awk 'NF && !seen[$0]++' "$ISO/cde/onboot.lst" >"$ISO/cde/onboot.lst.new"
 mv "$ISO/cde/onboot.lst.new" "$ISO/cde/onboot.lst"
 
-(
-  cd "$CORE"
-  find . -print0
-) | docker run --rm -i --platform linux/amd64 -v "$WORK:/work" alpine:3.22.1 sh -c '
+docker run --rm --platform linux/amd64 -v "$WORK:/work" alpine:3.22.1 sh -eu -c '
   apk add --no-cache cpio gzip >/dev/null
-  cd /work/core && cpio --null -o -H newc | gzip -9 > /work/core.gz
+  cd /work/core
+  find . -print0 > /work/core-files.bin
+  cpio --null -o -H newc < /work/core-files.bin > /work/core.cpio
+  gzip -9 -c /work/core.cpio > /work/core.gz
 '
 cp "$WORK/core.gz" "$ISO/boot/core.gz"
 find "$ISO" -name 'isolinux.cfg' -o -name 'syslinux.cfg' | while read -r cfg; do
@@ -95,4 +123,6 @@ docker run --rm --platform linux/amd64 -v "$ISO:/iso" -v "$(dirname "$OUT"):/out
 sha256sum "$OUT"
 ls -lh "$OUT"
 # Keep the checksummed ISO and downloads, not the extracted remaster tree.
+docker run --rm --platform linux/amd64 -v "$WORK:/work" alpine:3.22.1 \
+  sh -c 'rm -rf /work/core /work/iso /work/core.cpio /work/core.gz /work/core-files.bin'
 rm -rf "$WORK"

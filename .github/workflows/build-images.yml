@@ -81,6 +81,9 @@ jobs:
       - name: Clean optional comparison scratch
         if: always() && (github.event_name == 'push' || inputs.build_patched)
         run: |
+          mkdir -p .image-build-work/target-8.2.35
+          docker run --rm --platform linux/amd64 -v "$PWD/.image-build-work/target-8.2.35:/work" alpine:3.22.1 \
+            sh -c 'rm -rf /work/rootfs /work/iso /work/base /work/rootfs.tar /work/rootfs.cpio /work/rootfs-files.bin /work/initramfs-lts'
           rm -rf .image-build-work/target-8.2.35
           docker image rm cyber-range-target:8.2.35 >/dev/null 2>&1 || true
       - name: Refresh manifest after optional comparison

@@ -43,12 +43,27 @@ mkdir -p "$WORK/rootfs" "$WORK/iso" "$WORK/base"
 container="$(docker create --platform linux/386 "cyber-range-target:$PHP_VERSION")"
 trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
 docker export "$container" -o "$WORK/rootfs.tar"
-tar -xf "$WORK/rootfs.tar" -C "$WORK/rootfs"
-tar -f "$WORK/rootfs.tar" --delete .dockerenv 2>/dev/null || true
+# Extract as root so Alpine's UID/GID, setuid bits, and private-directory modes
+# survive into the initramfs. A non-root host tar would silently assign every
+# file to the CI account and break the guest security boundary.
+docker run --rm --platform linux/amd64 -v "$WORK:/work" alpine:3.22.1 sh -eu -c '
+  tar -xf /work/rootfs.tar -C /work/rootfs
+  rm -f /work/rootfs/.dockerenv
+  test -x /work/rootfs/bin/busybox
+  test -x /work/rootfs/usr/local/bin/php
+  test "$(stat -c %u /work/rootfs/bin/busybox)" = 0
+  test "$(stat -c %u /work/rootfs/etc/passwd)" = 0
+  # v86 exposes fixed NE2000/IDE devices that need no option firmware. Alpine's
+  # full firmware set otherwise dominates the initramfs and the browser download.
+  rm -rf /work/rootfs/lib/firmware
+  mkdir -p /work/rootfs/lib/firmware
+  du -sh /work/rootfs /work/rootfs/lib/modules
+'
 [[ -x "$WORK/rootfs/bin/busybox" && -x "$WORK/rootfs/usr/local/bin/php" ]] || { echo 'Target rootfs verification failed' >&2; exit 1; }
 
-# Use official Alpine boot media, replacing only its initramfs with the prepared
-# target rootfs. The same kernel and rootfs are therefore bootable under QEMU.
+# Use official Alpine boot media with the prepared target rootfs. Replace both
+# kernel and initramfs so the running kernel exactly matches the installed
+# module directory from the same target build.
 docker run --rm --platform linux/amd64 \
   -v "$ROOT:/work" -v "$DOWNLOADS:/downloads" alpine:3.22.1 sh -eu -c '
     apk add --no-cache xorriso >/dev/null
@@ -61,12 +76,16 @@ docker run --rm --platform linux/amd64 \
   -v "$WORK:/work" alpine:3.22.1 \
   sh -c 'chown -R "$HOST_UID:$HOST_GID" /work/base && chmod -R u+rwX /work/base'
 cp -a "$WORK/base/boot" "$WORK/iso/"
-(
-  cd "$WORK/rootfs"
-  find . -path './dev' -prune -o -path './proc' -prune -o -path './sys' -prune -o -path './run' -prune -o -print0
-) | docker run --rm -i --platform linux/amd64 -v "$WORK:/work" alpine:3.22.1 sh -c '
+[[ -s "$WORK/rootfs/boot/vmlinuz-lts" ]] || { echo 'Matching target kernel is missing' >&2; exit 1; }
+cp "$WORK/rootfs/boot/vmlinuz-lts" "$WORK/iso/boot/vmlinuz-lts"
+docker run --rm --platform linux/amd64 -v "$WORK:/work" alpine:3.22.1 sh -eu -c '
   apk add --no-cache cpio gzip >/dev/null
-  cd /work/rootfs && cpio --null -o -H newc | gzip -9 > /work/initramfs-lts
+  cd /work/rootfs
+  # The kernel and any generated boot artifacts live on the ISO, not inside
+  # the runtime rootfs; including /boot here would duplicate them in RAM.
+  find . -path "./boot" -prune -o -path "./dev" -prune -o -path "./proc" -prune -o -path "./sys" -prune -o -path "./run" -prune -o -print0 > /work/rootfs-files.bin
+  cpio --null -o -H newc < /work/rootfs-files.bin > /work/rootfs.cpio
+  gzip -9 -c /work/rootfs.cpio > /work/initramfs-lts
 '
 cp "$WORK/initramfs-lts" "$WORK/iso/boot/initramfs-lts"
 # Enable both the visible VGA console and hidden serial control channel.
@@ -89,4 +108,6 @@ ls -lh "$OUT"
 # multi-GB Docker images while the optional comparison is built.
 docker rm -f "$container" >/dev/null 2>&1 || true
 docker image rm "cyber-range-target:$PHP_VERSION" >/dev/null 2>&1 || true
+docker run --rm --platform linux/amd64 -v "$WORK:/work" alpine:3.22.1 \
+  sh -c 'rm -rf /work/rootfs /work/iso /work/base /work/rootfs.tar /work/rootfs.cpio /work/rootfs-files.bin /work/initramfs-lts'
 rm -rf "$WORK"
