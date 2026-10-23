@@ -54,6 +54,12 @@ docker run --rm --platform linux/amd64 \
     apk add --no-cache xorriso >/dev/null
     xorriso -osirrox on -indev "/downloads/'"$(basename "$ALPINE_ISO")"'" -extract /boot /work/.image-build-work/target-'"$PHP_VERSION"'/base/boot >/dev/null 2>&1
   '
+# xorriso runs as root in the utility container and ISO files are commonly
+# read-only. Hand the extracted boot tree back before editing its configs.
+docker run --rm --platform linux/amd64 \
+  -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+  -v "$WORK:/work" alpine:3.22.1 \
+  sh -c 'chown -R "$HOST_UID:$HOST_GID" /work/base && chmod -R u+rwX /work/base'
 cp -a "$WORK/base/boot" "$WORK/iso/"
 (
   cd "$WORK/rootfs"
