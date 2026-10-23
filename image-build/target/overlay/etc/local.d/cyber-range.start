@@ -1,9 +1,22 @@
 #!/bin/sh
 # Genuine target service/network initialization inside Alpine.
-mkdir -p /run/cyber-range /var/log/apache2
+mkdir -p /run/cyber-range /run/apache2 /var/log/apache2
 chmod 0750 /run/cyber-range
+chmod 0755 /run/apache2
 date +%s >/run/cyber-range/session-start
 chmod 0644 /run/cyber-range/session-start
+
+# Docker's generated hosts/hostname data is not a stable guest identity, and
+# the runtime /run tree is intentionally absent from the initramfs. Apache
+# resolves its local identity while initializing listeners, so provide real
+# loopback and numeric host mappings before starting it; no DNS is required.
+hostname assessment-target
+cat >/etc/hosts <<'EOF'
+127.0.0.1 localhost localhost.localdomain
+192.168.10.55 assessment-target
+EOF
+ip link set lo up 2>/dev/null || ifconfig lo up
+ip addr add 127.0.0.1/8 dev lo 2>/dev/null || true
 
 modprobe ne2k-pci 2>/dev/null || true
 ip link set eth0 up 2>/dev/null || ifconfig eth0 up
@@ -20,7 +33,12 @@ chmod 0750 /var/log/apache2
 chown root:apache /var/www/html
 chmod 0775 /var/www/html
 
-rc-service apache2 start
+httpd -t || { echo 'CYBER_RANGE_TARGET_FAILED apache_config'; exit 1; }
+if ! rc-service apache2 start; then
+  tail -n 40 /var/log/apache2/error.log 2>/dev/null || true
+  echo 'CYBER_RANGE_TARGET_FAILED apache_start'
+  exit 1
+fi
 n=0
 while [ "$n" -lt 30 ]; do
   if wget -q -T 3 -O /tmp/cyber-range-health.json http://127.0.0.1/health.php 2>/dev/null; then break; fi
