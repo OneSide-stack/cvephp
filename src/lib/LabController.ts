@@ -25,7 +25,7 @@ import {
   saveSnapshot,
   type SnapshotRecord,
 } from "./storage";
-import { clampText, randomToken, sha256Text } from "./utils";
+import { clampText, jsonFromOutput, randomToken, sha256Text } from "./utils";
 
 interface LoadedImages {
   attacker: ArrayBuffer;
@@ -55,13 +55,6 @@ function freshState(): LabState {
     activity: [...initialState.activity],
     snapshots: [],
   };
-}
-
-function jsonFromOutput<T>(output: string): T {
-  const start = output.indexOf("{");
-  const end = output.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error(`Guest did not return a JSON object: ${output.slice(-500)}`);
-  return JSON.parse(output.slice(start, end + 1)) as T;
 }
 
 function sleep(ms: number): Promise<void> {

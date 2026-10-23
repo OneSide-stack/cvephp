@@ -54,6 +54,36 @@ export function parseKeyValues(raw: string): Record<string, string> {
   return result;
 }
 
+/** Extract a real guest JSON object even when the serial TTY echoes shell braces. */
+export function jsonFromOutput<T>(output: string): T {
+  for (let start = output.indexOf("{"); start >= 0; start = output.indexOf("{", start + 1)) {
+    let depth = 0;
+    let quoted = false;
+    let escaped = false;
+    for (let index = start; index < output.length; index += 1) {
+      const character = output[index];
+      if (quoted) {
+        if (escaped) escaped = false;
+        else if (character === "\\") escaped = true;
+        else if (character === '"') quoted = false;
+        continue;
+      }
+      if (character === '"') quoted = true;
+      else if (character === "{") depth += 1;
+      else if (character === "}") {
+        depth -= 1;
+        if (depth !== 0) continue;
+        try {
+          return JSON.parse(output.slice(start, index + 1)) as T;
+        } catch {
+          break; // This was terminal echo or other non-JSON text; try the next object.
+        }
+      }
+    }
+  }
+  throw new Error(`Guest did not return a valid JSON object: ${output.slice(-500)}`);
+}
+
 export function clampText(value: string, maximum = 64_000): string {
   if (value.length <= maximum) return value;
   return `… ${value.length - maximum} earlier characters omitted …\n${value.slice(-maximum)}`;

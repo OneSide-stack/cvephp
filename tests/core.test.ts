@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { assertLocalAssetPath } from "../src/lib/assets";
 import { initialState } from "../src/lib/initialState";
 import { createJsonReport, createMarkdownReport } from "../src/lib/report";
-import { clampText, formatBytes, parseKeyValues, stripAnsi } from "../src/lib/utils";
+import { clampText, formatBytes, jsonFromOutput, parseKeyValues, stripAnsi } from "../src/lib/utils";
 import type { LabState } from "../src/types";
 
 function state(): LabState {
@@ -12,6 +12,16 @@ function state(): LabState {
 describe("guest output helpers", () => {
   it("parses key/value evidence without interpreting its meaning", () => {
     expect(parseKeyValues("php_version=8.2.34\ninvalid\npath=a=b\n")).toEqual({ php_version: "8.2.34", path: "a=b" });
+  });
+
+  it("ignores echoed shell blocks and parses compact or pretty guest JSON", () => {
+    expect(jsonFromOutput<{ machine: string }>("{ labctl ready\n}\n{\"machine\":\"attacker\"}\n").machine).toBe("attacker");
+    expect(jsonFromOutput<{ service: string; nested: { ok: boolean } }>("{ labctl health\n}\n{\n  \"service\": \"assessment-portal\",\n  \"nested\": { \"ok\": true }\n}\n").nested.ok).toBe(true);
+  });
+
+  it("handles braces in JSON strings and rejects missing valid objects", () => {
+    expect(jsonFromOutput<{ value: string }>("{ command\n}\n{\"value\":\"a } and { brace\"}").value).toBe("a } and { brace");
+    expect(() => jsonFromOutput("{ labctl ready\n}")).toThrow("valid JSON");
   });
 
   it("removes terminal control sequences but preserves observable text", () => {
