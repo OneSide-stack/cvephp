@@ -85,3 +85,8 @@ docker run --rm --platform linux/amd64 -v "$WORK/iso:/iso" -v "$(dirname "$OUT")
 [[ -s "$OUT" ]] || { echo 'No target ISO produced' >&2; exit 1; }
 sha256sum "$OUT"
 ls -lh "$OUT"
+# The ISO is the deliverable; do not retain two exported rootfs trees and
+# multi-GB Docker images while the optional comparison is built.
+docker rm -f "$container" >/dev/null 2>&1 || true
+docker image rm "cyber-range-target:$PHP_VERSION" >/dev/null 2>&1 || true
+rm -rf "$WORK"

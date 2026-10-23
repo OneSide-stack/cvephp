@@ -43,9 +43,6 @@ jobs:
         run: bash image-build/build-target.sh 8.2.34 target-php-8.2.34.iso
       - name: Build TinyCore graphical attacker
         run: bash image-build/build-attacker.sh
-      - name: Build Alpine PHP 8.2.35 patched comparison
-        if: github.event_name == 'push' || inputs.build_patched
-        run: bash image-build/build-target.sh 8.2.35 target-php-8.2.35.iso
       - name: Generate and verify asset manifest
         run: node scripts/prepare-runtime.mjs && node scripts/generate-asset-manifest.mjs && node scripts/verify-assets.mjs
       - name: Record artifact inventory
@@ -76,6 +73,41 @@ jobs:
         env:
           PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /tmp/chromium
           LD_LIBRARY_PATH: /tmp/al2023/lib
+      - name: Build optional Alpine PHP 8.2.35 comparison
+        id: patched
+        if: github.event_name == 'push' || inputs.build_patched
+        continue-on-error: true
+        run: bash image-build/build-target.sh 8.2.35 target-php-8.2.35.iso
+      - name: Clean optional comparison scratch
+        if: always() && (github.event_name == 'push' || inputs.build_patched)
+        run: |
+          rm -rf .image-build-work/target-8.2.35
+          docker image rm cyber-range-target:8.2.35 >/dev/null 2>&1 || true
+      - name: Refresh manifest after optional comparison
+        if: github.event_name == 'push' || inputs.build_patched
+        run: node scripts/generate-asset-manifest.mjs && node scripts/verify-assets.mjs
+      - name: Record final artifact inventory
+        if: github.event_name == 'push' || inputs.build_patched
+        run: |
+          sha256sum public/lab-assets/*.iso public/v86/*.bin public/v86/*.wasm > image-checksums.txt
+          ls -lh public/lab-assets/*.iso
+          if [ "${{ steps.patched.outcome }}" = failure ]; then
+            echo 'Optional PHP 8.2.35 comparison was not produced; required guest acceptance already ran.' >> image-checksums.txt
+            echo '::warning::Optional PHP 8.2.35 comparison failed; see its build log. Required images and acceptance are independent.'
+          fi
+      - name: Upload final guest images and manifest
+        if: github.event_name == 'push' || inputs.build_patched
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyber-range-guest-images
+          overwrite: true
+          path: |
+            public/lab-assets/*.iso
+            public/lab-assets/manifest.json
+            public/v86/*.bin
+            public/v86/*.wasm
+            image-checksums.txt
+          retention-days: 30
       - name: Upload guest acceptance diagnostics
         if: always()
         uses: actions/upload-artifact@v4

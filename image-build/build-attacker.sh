@@ -94,3 +94,5 @@ docker run --rm --platform linux/amd64 -v "$ISO:/iso" -v "$(dirname "$OUT"):/out
 [[ -s "$OUT" ]] || { echo 'No attacker ISO produced' >&2; exit 1; }
 sha256sum "$OUT"
 ls -lh "$OUT"
+# Keep the checksummed ISO and downloads, not the extracted remaster tree.
+rm -rf "$WORK"
