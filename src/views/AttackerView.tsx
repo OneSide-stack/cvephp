@@ -11,6 +11,7 @@ export function AttackerView() {
   const ready = ["ready", "testing", "completed"].includes(state.status);
   const selected = state.manifest?.targets.find((target) => target.id === state.selectedTarget);
   const ram = state.resourceMode === "low" ? 640 : 896;
+  const hasBrowser = state.attackerTools.includes("dillo-beta") || state.attackerTools.includes("dillo");
 
   return <div className="view attacker-view">
     <PageHeading index="01" eyebrow="ATTACKER WORKSTATION" title="Your foothold in the range" description="A real Tiny Core x86 desktop with guest-hosted tooling, connected to one isolated assessment target."
@@ -26,10 +27,10 @@ export function AttackerView() {
         {running ? <>
           <Panel eyebrow="GUEST APPLICATIONS" title="Launch on workstation">
             <div className="app-launcher-list">
-              <button onClick={() => void controller.launchAttackerTool("browser")} disabled={!ready || !state.attackerTools.includes("dillo")}>
+              <button onClick={() => void controller.launchAttackerTool("browser")} disabled={!ready || !hasBrowser}>
                 <span className="app-icon teal"><Globe2 size={20} /></span><span><strong>HTTP browser</strong><small>Dillo · real target responses</small></span><ChevronRight size={16} />
               </button>
-              <button onClick={() => void controller.launchAttackerTool("proxy")} disabled={!ready || !state.attackerTools.includes("dillo") || state.proxyStatus !== "running"}>
+              <button onClick={() => void controller.launchAttackerTool("proxy")} disabled={!ready || !hasBrowser || state.proxyStatus !== "running"}>
                 <span className="app-icon amber"><Waypoints size={20} /></span><span><strong>RangeProxy</strong><small>Intercept + repeater · not Burp</small></span><ChevronRight size={16} />
               </button>
               <button onClick={() => void controller.launchAttackerTool("terminal")} disabled={!ready || (!state.attackerTools.includes("aterm") && !state.attackerTools.includes("xterm"))}>

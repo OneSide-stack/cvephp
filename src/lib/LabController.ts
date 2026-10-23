@@ -674,15 +674,17 @@ export class LabController {
   launchAttackerTool = async (tool: "browser" | "proxy" | "terminal"): Promise<void> => {
     if (this.state.operation || !this.runtime.attacker || !["ready", "testing", "completed"].includes(this.state.status)) return;
     const generation = this.generation;
-    const required = tool === "terminal" ? (this.state.attackerTools.includes("aterm") ? "aterm" : "xterm") : "dillo";
+    const required = tool === "terminal"
+      ? (this.state.attackerTools.includes("aterm") ? "aterm" : "xterm")
+      : (this.state.attackerTools.includes("dillo-beta") ? "dillo-beta" : "dillo");
     if (!this.state.attackerTools.includes(required)) {
       this.patch({ error: `${required} was not found by the attacker guest's tool inventory. No launcher was created.` });
       return;
     }
     const command = tool === "browser"
-      ? "DISPLAY=:0 dillo http://192.168.10.55/ >/tmp/range-browser.log 2>&1 &"
+      ? `DISPLAY=:0 ${required} http://192.168.10.55/ >/tmp/range-browser.log 2>&1 &`
       : tool === "proxy"
-        ? "DISPLAY=:0 dillo http://127.0.0.1:8081/ >/tmp/range-proxy-ui.log 2>&1 &"
+        ? `DISPLAY=:0 ${required} http://127.0.0.1:8081/ >/tmp/range-proxy-ui.log 2>&1 &`
         : `DISPLAY=:0 ${required} >/tmp/range-terminal.log 2>&1 &`;
     this.patch({ operation: `Launching ${required} in attacker guest` });
     try {
