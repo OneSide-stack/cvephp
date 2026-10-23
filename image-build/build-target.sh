@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+trap 'rc=$?; printf "::error::Target image build failed at line %s: %s (exit %s)\\n" "$LINENO" "$BASH_COMMAND" "$rc" >&2; exit "$rc"' ERR
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PHP_VERSION="${1:-8.2.34}"
 ALPINE_VERSION="${ALPINE_VERSION:-3.22.1}"

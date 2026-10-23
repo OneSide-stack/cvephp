@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+trap 'rc=$?; printf "::error::Attacker image build failed at line %s: %s (exit %s)\\n" "$LINENO" "$BASH_COMMAND" "$rc" >&2; exit "$rc"' ERR
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DOWNLOADS="$ROOT/image-build/downloads"
 WORK="$ROOT/.image-build-work/attacker"
