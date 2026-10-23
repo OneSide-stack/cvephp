@@ -29,6 +29,9 @@ docker run --rm --platform linux/amd64 \
 
 CORE="$WORK/core"
 ISO="$WORK/iso"
+# The extracted base is allowed to omit empty directories. Create every
+# overlay destination explicitly; install(1) does not create parent directories.
+mkdir -p "$CORE/opt" "$CORE/usr/local/bin" "$CORE/etc"
 install -m 0755 "$ROOT/image-build/attacker/bootlocal.sh" "$CORE/opt/bootlocal.sh"
 install -m 0755 "$ROOT/image-build/attacker/labctl" "$CORE/usr/local/bin/labctl"
 install -m 0755 "$ROOT/image-build/attacker/lab-console" "$CORE/usr/local/bin/lab-console"
