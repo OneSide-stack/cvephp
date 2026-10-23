@@ -73,6 +73,12 @@ jobs:
         env:
           PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /tmp/chromium
           LD_LIBRARY_PATH: /tmp/al2023/lib
+      - name: Print guest acceptance failure context
+        if: failure()
+        run: |
+          if [ -d test-results ]; then
+            find test-results -type f -name 'error-context.md' -print -exec sed -n '1,240p' {} \;
+          fi
       - name: Build optional Alpine PHP 8.2.35 comparison
         id: patched
         if: github.event_name == 'push' || inputs.build_patched

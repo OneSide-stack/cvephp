@@ -53,10 +53,9 @@ docker run --rm --platform linux/amd64 -v "$WORK:/work" alpine:3.22.1 sh -eu -c 
   test -x /work/rootfs/usr/local/bin/php
   test "$(stat -c %u /work/rootfs/bin/busybox)" = 0
   test "$(stat -c %u /work/rootfs/etc/passwd)" = 0
-  # v86 exposes fixed NE2000/IDE devices that need no option firmware. Alpine's
-  # full firmware set otherwise dominates the initramfs and the browser download.
+  # v86 exposes fixed NE2000/IDE devices that need no option firmware. The full
+  # Alpine firmware set otherwise dominates the initramfs and browser download.
   rm -rf /work/rootfs/lib/firmware
-  mkdir -p /work/rootfs/lib/firmware
   du -sh /work/rootfs /work/rootfs/lib/modules
 '
 [[ -x "$WORK/rootfs/bin/busybox" && -x "$WORK/rootfs/usr/local/bin/php" ]] || { echo 'Target rootfs verification failed' >&2; exit 1; }
