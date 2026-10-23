@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: "./tests/guest",
   fullyParallel: false,
   workers: 1,
-  timeout: 15 * 60 * 1000,
+  timeout: 20 * 60 * 1000,
   expect: { timeout: 20_000 },
   reporter: [["list"], ["html", { open: "never", outputFolder: "playwright-guest-report" }]],
   use: {

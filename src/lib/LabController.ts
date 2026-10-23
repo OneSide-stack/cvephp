@@ -40,7 +40,9 @@ interface MachineRuntime {
   serial: SerialChannel;
 }
 
-const BOOT_TIMEOUT = 240_000;
+// Package loading in the graphical TinyCore guest can exceed four minutes on
+// a software-emulated CPU. Readiness still requires the real shell and checks.
+const BOOT_TIMEOUT = 360_000;
 
 function freshState(): LabState {
   return {
@@ -436,9 +438,8 @@ export class LabController {
 
   private async provisionTarget(serial: SerialChannel): Promise<void> {
     if (!this.state.session) throw new Error("No active session is available for target provisioning");
-    await serial.exec("stty -echo", 10_000);
+    // SerialChannel suppresses and restores TTY echo around every command.
     const result = await serial.exec(`labctl provision '${this.state.session.challenge}'`, 15_000);
-    await serial.exec("stty echo", 10_000);
     const digest = result.output.match(/CYBER_RANGE_FLAG_PROVISIONED\s+sha256=([0-9a-f]{64})/)?.[1];
     if (result.exitCode !== 0 || !digest) {
       throw new Error(`Target rejected flag provisioning or returned no digest: ${result.output}`);

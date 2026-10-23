@@ -10,6 +10,7 @@ on:
       - 'scripts/prepare-runtime.mjs'
       - 'src/lib/**'
       - 'tests/**'
+      - 'playwright.guest.config.ts'
       - '.github/workflows/build-images.yml'
   workflow_dispatch:
     inputs:

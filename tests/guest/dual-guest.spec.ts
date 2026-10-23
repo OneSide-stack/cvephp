@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 
 // This suite is intentionally separate from the missing-image shell tests.
 // It must be run against the checksummed CI/local guest artifacts.
-test.setTimeout(15 * 60 * 1000);
+test.setTimeout(20 * 60 * 1000);
 
 test("real dual guests provide network, HTTP, telemetry, and proxy evidence", async ({ page }) => {
   const pageErrors: string[] = [];
@@ -15,7 +15,7 @@ test("real dual guests provide network, HTTP, telemetry, and proxy evidence", as
   await expect(page.locator(".preflight-list .text-success")).toHaveCount(3);
 
   await page.getByRole("button", { name: "Start lab", exact: true }).first().click();
-  await expect(page.locator(".brand-right .status-pill")).toHaveText("Ready", { timeout: 10 * 60 * 1000 });
+  await expect(page.locator(".brand-right .status-pill")).toHaveText("Ready", { timeout: 15 * 60 * 1000 });
   await expect(page.locator("#vm-attacker .vm-statusbar .status-pill")).toHaveText("Ready");
   await expect(page.locator("#vm-target .vm-statusbar .status-pill")).toHaveText("Ready");
   await expect(page.locator("#vm-attacker canvas")).toBeVisible();
