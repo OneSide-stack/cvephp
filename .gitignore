@@ -11,3 +11,6 @@ public/lab-assets/*.iso
 public/lab-assets/*.img
 public/lab-assets/*.bin.zst
 public/lab-assets/manifest.local.json
+
+__pycache__/
+*.pyc

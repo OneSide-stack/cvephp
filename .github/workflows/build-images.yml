@@ -1,6 +1,14 @@
 name: Build reproducible guest images
 
 on:
+  push:
+    branches:
+      - arena/5befbcf9-cvephp
+    paths:
+      - 'image-build/**'
+      - 'scripts/*asset*'
+      - 'scripts/prepare-runtime.mjs'
+      - '.github/workflows/build-images.yml'
   workflow_dispatch:
     inputs:
       build_patched:
