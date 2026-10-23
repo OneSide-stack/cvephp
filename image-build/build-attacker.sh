@@ -27,12 +27,12 @@ docker run --rm --platform linux/amd64 \
     gzip -dc ../iso/boot/core.gz | cpio -idmu >/dev/null 2>&1
   '
 # cpio runs as root in the utility container. Return the extracted tree to the
-# host user before install/sed operations; otherwise existing root-owned files
-# such as opt/bootlocal.sh cannot be replaced on the GitHub runner.
+# host user and normalize read-only ISO modes before install/sed/cp operations;
+# otherwise existing root-owned or read-only files cannot be replaced on the runner.
 docker run --rm --platform linux/amd64 \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$WORK:/work" alpine:3.22.1 \
-  sh -c 'chown -R "$HOST_UID:$HOST_GID" /work/core /work/iso'
+  sh -c 'chown -R "$HOST_UID:$HOST_GID" /work/core /work/iso && chmod -R u+rwX /work/core /work/iso'
 
 CORE="$WORK/core"
 ISO="$WORK/iso"

@@ -50,7 +50,8 @@ jobs:
         run: node scripts/prepare-runtime.mjs && node scripts/generate-asset-manifest.mjs && node scripts/verify-assets.mjs
       - name: Record artifact inventory
         run: sha256sum public/lab-assets/*.iso public/v86/*.bin public/v86/*.wasm > image-checksums.txt && ls -lh public/lab-assets/*.iso
-      - uses: actions/upload-artifact@v4
+      - name: Upload verified guest images
+        uses: actions/upload-artifact@v4
         with:
           name: cyber-range-guest-images
           path: |
@@ -59,4 +60,29 @@ jobs:
             public/v86/*.bin
             public/v86/*.wasm
             image-checksums.txt
+          retention-days: 30
+      - name: Prepare registry-packaged Chromium
+        shell: bash
+        run: |
+          mkdir -p /tmp/cyber-range-chromium
+          cd /tmp/cyber-range-chromium
+          npm init -y >/dev/null
+          npm install @sparticuz/chromium@153.0.0 --no-audit --no-fund
+          rm -f /tmp/chromium
+          rm -rf /tmp/al2023 /tmp/fonts /tmp/swiftshader
+          AWS_EXECUTION_ENV=nodejs22.x node --input-type=module -e 'import Chromium from "@sparticuz/chromium"; await Chromium.executablePath();'
+      - name: Real dual-guest browser acceptance
+        run: npm run test:e2e:guest
+        env:
+          PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /tmp/chromium
+          LD_LIBRARY_PATH: /tmp/al2023/lib
+      - name: Upload guest acceptance diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyber-range-guest-acceptance
+          path: |
+            test-results/
+            playwright-guest-report/
+          if-no-files-found: ignore
           retention-days: 30
