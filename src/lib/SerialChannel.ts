@@ -108,12 +108,12 @@ export class SerialChannel {
     const id = randomToken(8);
     const begin = `__CR_${id}_BEGIN__`;
     const endPattern = new RegExp(`__CR_${id}_END:(\\d+)__`);
-    const donePattern = new RegExp(`__CR_${id}_DONE__`);
-    // Disable TTY echo only while the command protocol runs. Otherwise the
-    // echoed shell block becomes indistinguishable from guest output (and can
-    // look like a false tool or malformed JSON). Restore the prior stty mode
-    // before DONE so the next command or manual terminal input cannot race it.
-    const script = `__cr_tty=$(stty -g)\nstty -echo\nprintf '\\n__CR_%s_BEGIN__\\n' '${id}'\n{ ${command}\n}\n__cr_rc=$?\nprintf '\\n__CR_%s_END:%s__\\n' '${id}' \"$__cr_rc\"\nstty \"$__cr_tty\"\nprintf '\\n__CR_%s_DONE__\\n' '${id}'\n`;
+    // Use one shell line: an interactive shell prints prompts between input
+    // lines, which would otherwise contaminate the marked command output. The
+    // echoed input line precedes BEGIN; stty then suppresses echo until END.
+    // The queued restore runs before the shell can read another command line.
+    const quotedCommand = `'${command.replace(/'/g, `'"'"'`)}'`;
+    const script = `__cr_tty=$(stty -g); stty -echo; printf '\\n__CR_%s_BEGIN__\\n' '${id}'; eval ${quotedCommand}; __cr_rc=$?; printf '\\n__CR_%s_END:%s__\\n' '${id}' \"$__cr_rc\"; stty \"$__cr_tty\"\n`;
     const started = performance.now();
     return new Promise((resolve, reject) => {
       let observed = "";
@@ -129,7 +129,6 @@ export class SerialChannel {
       };
       const unsubscribe = this.subscribe((text) => {
         observed = clampText(observed + text, 1_200_000);
-        if (!donePattern.test(observed)) return;
         const end = endPattern.exec(observed);
         if (!end) return;
         const beginIndex = observed.indexOf(begin);
