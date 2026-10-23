@@ -12,6 +12,10 @@ export default defineConfig({
     viewport: { width: 1440, height: 1000 },
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
+    launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? {
+      executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+      args: ["--no-sandbox", "--disable-dev-shm-usage"],
+    } : undefined,
   },
   webServer: {
     command: "npm run dev -- --port 4173 --strictPort",

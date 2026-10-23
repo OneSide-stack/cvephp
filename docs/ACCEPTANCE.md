@@ -27,12 +27,12 @@ The following commands have run successfully after the latest controller edits a
 
 ```text
 npm run lint       — strict TypeScript project check
-npm test           — 11 Vitest tests + 8 Python guest-tool tests
+npm test           — 14 Vitest tests + 8 Python guest-tool tests
 bash -n …          — shell syntax checks for build/boot/control scripts
 python3 -m py_compile … — Python syntax compilation
 ```
 
-`npm run build` also completed successfully before the final lifecycle-only edits; rerun it for the final artifact. Playwright specs are present but no Chromium binary is installed in this workspace, so no local browser assertion is claimed here. GitHub Actions results must be checked separately; a queued or completed image job is not a guest runtime test.
+`npm run build` completed successfully after the controller and UI edits. `npm run test:e2e` also completed locally: **4 Playwright tests passed** using a registry-packaged Chromium binary (persistent view containers, missing-image failure, report export, and narrow layout). This is browser-shell evidence, not guest-boot evidence. GitHub Actions results must be checked separately; a queued or completed image job is not a guest runtime test.
 
 ## Minimum real guest acceptance run
 

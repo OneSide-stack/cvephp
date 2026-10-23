@@ -6,7 +6,7 @@ test("all views remain mounted and only genuine guest state is shown", async ({ 
   await expect(page.getByRole("heading", { name: "Your foothold in the range" })).toBeVisible();
   await expect(page.locator("#vm-attacker .v86-screen")).toBeAttached();
   await expect(page.locator("#vm-target .v86-screen")).toBeAttached();
-  await expect(page.locator("#vm-attacker canvas")).toHaveCount(0);
+  await expect(page.locator("#vm-attacker canvas")).toBeHidden();
 
   for (const [name, heading] of [
     ["TARGET SERVER HOUSING", "Assessment target internals"],
@@ -25,8 +25,8 @@ test("missing pinned images fail visibly without a fake VM", async ({ page }) =>
   await page.locator(".control-deck").getByRole("button", { name: "Start lab", exact: true }).click();
   await expect(page.locator(".inline-message.error")).toContainText(/image is missing|not provisioned|could not be loaded/i);
   await expect(page.locator(".brand-right .status-pill")).toContainText("Failed");
-  await expect(page.locator("#vm-attacker canvas")).toHaveCount(0);
-  await expect(page.locator("#vm-target canvas")).toHaveCount(0);
+  await expect(page.locator("#vm-attacker canvas")).toBeHidden();
+  await expect(page.locator("#vm-target canvas")).toBeHidden();
   await expect(page.getByRole("button", { name: "Reset lab", exact: true })).toBeEnabled();
 });
 

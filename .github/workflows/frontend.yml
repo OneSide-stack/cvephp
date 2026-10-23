@@ -39,7 +39,18 @@ jobs:
         run: npm test
       - name: Production build
         run: npm run build
-      - name: Install Chromium
-        run: npx playwright install chromium
+      - name: Prepare registry-packaged Chromium
+        shell: bash
+        run: |
+          mkdir -p /tmp/cyber-range-chromium
+          cd /tmp/cyber-range-chromium
+          npm init -y >/dev/null
+          npm install @sparticuz/chromium@153.0.0 --no-audit --no-fund
+          rm -f /tmp/chromium
+          rm -rf /tmp/al2023 /tmp/fonts /tmp/swiftshader
+          AWS_EXECUTION_ENV=nodejs22.x node --input-type=module -e 'import Chromium from "@sparticuz/chromium"; await Chromium.executablePath();'
       - name: Browser acceptance tests (missing-image path)
         run: npm run test:e2e
+        env:
+          PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /tmp/chromium
+          LD_LIBRARY_PATH: /tmp/al2023/lib

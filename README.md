@@ -137,7 +137,7 @@ npm run build            # runtime preparation + TypeScript + Vite production bu
 npm run test:e2e         # Playwright browser shell/missing-image acceptance tests
 ```
 
-The frontend workflow runs unit tests, guest-tool tests, the production build, and browser acceptance tests with Chromium. The image workflow builds and verifies the ISO artifact. Browser tests cover navigation/persistent VM containers, visible missing-image failure, resource selection, report export, and narrow layouts; they do not prove guest boot without provisioned media.
+The frontend workflow runs unit tests, guest-tool tests, the production build, and browser acceptance tests with a pinned registry-packaged Chromium (avoiding a runtime CDN dependency). The image workflow builds and verifies the ISO artifact. Browser tests cover navigation/persistent VM containers, visible missing-image failure, resource selection, report export, and narrow layouts; they do not prove guest boot without provisioned media.
 
 For real acceptance, boot both images and record the checks in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md). Do not mark RCE reproduced without fresh target-side execution evidence on the exact 32-bit build.
 

@@ -12,7 +12,7 @@ export function VmScreen({ machine, allowSerial = false, compact = false }: { ma
   const offline = ["offline", "stopped"].includes(guest.status);
   const active = state.view === machine;
 
-  return <div className={`vm-window ${compact ? "compact" : ""}`}>
+  return <div id={`vm-${machine}`} className={`vm-window ${compact ? "compact" : ""}`}>
     <div className="vm-titlebar">
       <div className="vm-title"><span className={`window-led ${guest.status === "ready" ? "online" : ""}`} /><strong>{machine === "attacker" ? "attacker-workstation" : "assessment-target"}</strong><span>/ {mode === "display" ? "tty1" : "ttyS0"}</span></div>
       <div className="vm-window-actions">
