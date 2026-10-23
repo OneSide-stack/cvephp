@@ -13,7 +13,7 @@ This file is deliberately conservative. “Implemented” means code/configurati
 | Real browser/proxy traffic | Guest Dillo and Python RangeProxy, raw request editor/repeater, target-only destination | Python parser/framing tests executed; real guest-to-guest browser/proxy traffic **unverified** |
 | Target logs and telemetry | Guest `labctl`, Apache/PHP log tails, `/proc` RSS/memory, PHP health/build identity | Shell syntax checked; live values and refresh behavior **unverified** |
 | PHP memory semantics | Separate configured 128 MiB limit, Apache/mod_php RSS, and guest memory | Data sources implemented; actual numbers under load **unverified** |
-| Per-session flag | Random session provisioning, target root writes `root:apache 0640`, hash-only client check, serial seal | Static/script checks executed; target filesystem permissions and reboot behavior **unverified** |
+| Per-session flag | Target `/dev/urandom` generation, target root writes `root:apache 0640`, digest-only client check, serial seal | Static/script checks executed; target filesystem permissions and reboot behavior **unverified** |
 | RCE proof | Apache-owned challenge file with session mtime, then matching flag; no simulation credit | **No RCE reproduction or shell evidence has been obtained**; exact 32-bit reliability remains unverified |
 | OOM research harness | Real streamed multipart probe with bounds and explicit no-RCE interpretation | Unit/static checks only; no OOM probe has run against the target |
 | Snapshots | Paired v86 `save_state()` buffers, IndexedDB metadata, MAC translation, restore revalidation | Quota handling and real save/restore **unverified** |

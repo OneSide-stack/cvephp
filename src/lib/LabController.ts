@@ -83,7 +83,9 @@ export class LabController {
   private wasmUrl: string | null = null;
   private V86Class: typeof V86 | null = null;
   private generation = 0;
-  private provisionSecret: string | null = null;
+  // True only for a session whose target has provisioned (or restored) its
+  // own flag. The plaintext flag is never retained by this controller.
+  private sessionProvisioned = false;
   private networkLockRelease: (() => void) | null = null;
   private telemetryTimer: ReturnType<typeof setInterval> | null = null;
   private telemetryRunning = false;
@@ -330,22 +332,23 @@ export class LabController {
     let session: SessionInfo;
     if (snapshot) {
       session = { ...snapshot.session, networkId: "", proof: undefined };
-      this.provisionSecret = snapshot.provisionSecret;
-    } else if (this.state.session && this.provisionSecret) {
+      this.sessionProvisioned = true;
+    } else if (this.state.session && this.sessionProvisioned) {
       session = { ...this.state.session, networkId: "", proof: undefined, flagSubmittedAt: undefined };
     } else {
-      // A persisted report has no provisioning secret. A new cold session must
-      // never inherit its evidence under a different session identifier.
+      // A persisted report has no live target provisioning context. A new cold
+      // session must never inherit its evidence under a different identifier.
       this.patch({ evidence: [], hasUnsavedProgress: false });
-      const flag = `RANGE{${randomToken(24)}}`;
-      this.provisionSecret = flag;
+      this.sessionProvisioned = false;
       session = {
         id: randomToken(8),
         networkId: "",
         startedAt: new Date().toISOString(),
         targetBuild: target.id,
         phpVersion: target.phpVersion,
-        flagSha256: await sha256Text(flag),
+        // Filled from the target's digest-only provisioning response. The
+        // plaintext flag is generated and stored inside the target guest.
+        flagSha256: "",
         challenge: randomToken(24),
       };
     }
@@ -439,13 +442,15 @@ export class LabController {
   }
 
   private async provisionTarget(serial: SerialChannel): Promise<void> {
-    if (!this.provisionSecret || !this.state.session) throw new Error("No per-session flag is available for target provisioning");
+    if (!this.state.session) throw new Error("No active session is available for target provisioning");
     await serial.exec("stty -echo", 10_000);
-    const result = await serial.exec(`labctl provision '${this.provisionSecret}' '${this.state.session.challenge}'`, 15_000);
+    const result = await serial.exec(`labctl provision '${this.state.session.challenge}'`, 15_000);
     await serial.exec("stty echo", 10_000);
-    if (result.exitCode !== 0 || !result.output.includes("CYBER_RANGE_FLAG_PROVISIONED")) {
-      throw new Error(`Target rejected flag provisioning: ${result.output}`);
+    const digest = result.output.match(/CYBER_RANGE_FLAG_PROVISIONED\s+sha256=([0-9a-f]{64})/)?.[1];
+    if (result.exitCode !== 0 || !digest) {
+      throw new Error(`Target rejected flag provisioning or returned no digest: ${result.output}`);
     }
+    this.patch({ session: { ...this.state.session, flagSha256: digest } });
     // Seal the hidden root control shell. The visible target and subsequent
     // telemetry commands run as the unprivileged Alpine 'lab' account.
     serial.sendRaw("labctl seal\n");
@@ -454,7 +459,8 @@ export class LabController {
     if (identity.exitCode !== 0 || identity.output.trim() !== "lab") {
       throw new Error(`Target serial seal did not produce the unprivileged lab context: ${identity.output}`);
     }
-    this.log("Target flag provisioned with root:apache 0640 permissions; hidden boot shell sealed to the lab user.");
+    this.sessionProvisioned = true;
+    this.log("Target generated the session flag internally with root:apache 0640 permissions; only its digest left the guest. Hidden boot shell sealed to the lab user.");
   }
 
   private async waitGuestReady(machine: MachineId, restored: boolean): Promise<void> {
@@ -804,11 +810,10 @@ export class LabController {
     if (this.state.operation || !this.state.session || !["ready", "testing", "completed"].includes(this.state.status)) return;
     const generation = this.generation;
     const session = this.state.session;
-    const provisionSecret = this.provisionSecret;
     const attacker = this.runtime.attacker?.emulator;
     const target = this.runtime.target?.emulator;
-    if (!attacker || !target || !provisionSecret || !this.targetSerialSealed) {
-      this.patch({ error: "Both verified running guests, a sealed target console, and the active provisioning context are required for a consistent snapshot." });
+    if (!attacker || !target || !session.flagSha256 || !this.sessionProvisioned || !this.targetSerialSealed) {
+      this.patch({ error: "Both verified running guests, a sealed target console, and target-generated session provisioning are required for a consistent snapshot." });
       return;
     }
     this.patch({ operation: "Saving both VM states", error: null });
@@ -828,7 +833,6 @@ export class LabController {
       const record: SnapshotRecord = {
         meta,
         session,
-        provisionSecret,
         resourceMode: this.state.resourceMode,
         attacker: attackerBuffer,
         target: targetBuffer,
@@ -862,8 +866,8 @@ export class LabController {
     if (this.state.operation || !["ready", "testing", "completed"].includes(this.state.status)) return;
     const runtime = this.runtime[machine];
     const session = this.state.session;
-    if (!runtime || !session || !this.provisionSecret) {
-      this.patch({ error: `${machine} is not running with a provisioned session.` });
+    if (!runtime || !session || !this.sessionProvisioned) {
+      this.patch({ error: `${machine} is not running with a target-provisioned session.` });
       return;
     }
     const generation = ++this.generation;
@@ -916,7 +920,7 @@ export class LabController {
     await this.destroyRuntimes();
     if (generation !== this.generation) return;
     const snapshots = this.state.snapshots;
-    this.provisionSecret = null;
+    this.sessionProvisioned = false;
     this.state = { ...freshState(), snapshots, resourceMode: this.state.resourceMode, selectedTarget: this.state.selectedTarget, manifest: this.state.manifest };
     this.emit();
     this.patch({ operation: null, notice: "Session, flag, challenge, proxy history, and guest changes were reset. Cached verified assets and explicitly saved snapshots were retained." });

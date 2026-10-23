@@ -113,7 +113,7 @@ The Target Server Housing view distinguishes:
 - Guest OS memory from target `/proc/meminfo` (`MemTotal - MemAvailable`).
 - Actual Apache process count/state, PHP version/SAPI, worker PID, and `libphp.so` SHA-256.
 
-A per-session flag is generated in the browser only as a provisioning secret, injected over the hidden root serial channel with echo disabled, and written by target root as `root:apache 0640`. It is not embedded in frontend source. The target serial login is then sealed to the unprivileged `lab` user using a boot-ID-bound marker. The browser retains only the flag hash for the CTF check.
+A per-session flag is generated inside the target from `/dev/urandom` during provisioning and written by target root as `root:apache 0640`. Only its SHA-256 digest crosses the hidden serial channel; the plaintext flag is never embedded in frontend source or retained by the controller. The target serial login is then sealed to the unprivileged `lab` user using a boot-ID-bound marker. The browser retains the digest for the CTF check.
 
 Completion requires **both**:
 
@@ -124,7 +124,7 @@ The guide shows commands to run only through a genuinely established execution c
 
 ## Snapshots and resets
 
-**Save state** calls v86 `save_state()` for both running guests and stores the paired buffers, session metadata, provisioning context, and resource mode in IndexedDB. Quota/transaction failures are shown and no partial pair is called saved. Restores use fresh network IDs, MAC translation, and real readiness/network checks. Saving is limited to verified, sealed running sessions.
+**Save state** calls v86 `save_state()` for both running guests and stores the paired buffers, session metadata (including the flag digest, never its plaintext), and resource mode in IndexedDB. Quota/transaction failures are shown and no partial pair is called saved. Restores use fresh network IDs, MAC translation, and real readiness/network checks. Saving is limited to verified, sealed running sessions.
 
 Reboot uses v86 hardware restart, reprovisions the target, removes old target proof, and repeats verification. Stop/reset controls live outside the guest canvas and remain available during guest timeouts. Destructive actions with unsaved progress require confirmation. Evidence export is separate from VM state snapshots.
 
@@ -135,9 +135,10 @@ npm test                 # Vitest + Python standard-library guest-tool tests
 npm run lint             # strict TypeScript project check
 npm run build            # runtime preparation + TypeScript + Vite production build
 npm run test:e2e         # Playwright browser shell/missing-image acceptance tests
+npm run test:e2e:guest   # Opt-in real checksummed dual-guest acceptance
 ```
 
-The frontend workflow runs unit tests, guest-tool tests, the production build, and browser acceptance tests with a pinned registry-packaged Chromium (avoiding a runtime CDN dependency). The image workflow builds and verifies the ISO artifact. Browser tests cover navigation/persistent VM containers, visible missing-image failure, resource selection, report export, and narrow layouts; they do not prove guest boot without provisioned media.
+The frontend workflow runs unit tests, guest-tool tests, the production build, and browser acceptance tests with a pinned registry-packaged Chromium (avoiding a runtime CDN dependency). The image workflow builds and verifies the ISO artifacts, then runs the opt-in real dual-guest suite when those artifacts exist. Browser shell tests cover navigation/persistent VM containers, visible missing-image failure, resource selection, report export, and narrow layouts; they do not prove guest boot without provisioned media. The guest suite additionally exercises real serial, network, HTTP, telemetry, proxy evidence, and report export.
 
 For real acceptance, boot both images and record the checks in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md). Do not mark RCE reproduced without fresh target-side execution evidence on the exact 32-bit build.
 

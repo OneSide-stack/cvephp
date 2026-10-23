@@ -38,13 +38,14 @@ test("real dual guests provide network, HTTP, telemetry, and proxy evidence", as
   await expect(page.locator(".logs-panel")).toContainText("evidence=learner-");
   await expect(page.locator(".logs-panel")).toContainText("192.168.10.10");
 
-  // Type into the actual attacker serial shell. The request is sent by the
-  // guest curl through the guest RangeProxy, not by Playwright or React.
+  // Type into the actual attacker serial shell. Disable the proxy's default
+  // intercept mode through its real loopback management socket, then send the
+  // request by guest curl through RangeProxy—not by Playwright or React.
   await page.getByRole("button", { name: "ATTACKER WORKSTATION", exact: true }).click();
   await page.locator("#vm-attacker").getByRole("button", { name: "Serial", exact: true }).click();
   await expect(page.locator("#vm-attacker .serial-terminal")).toBeVisible();
   await page.locator("#vm-attacker .serial-terminal").click();
-  await page.keyboard.type("curl -x http://127.0.0.1:8080 --max-time 20 -sS 'http://192.168.10.55/health.php?evidence=proxy-acceptance' >/tmp/proxy-acceptance.json; echo PROXY_ACCEPTANCE_DONE");
+  await page.keyboard.type("curl --noproxy '*' -sS -X POST -d '' http://127.0.0.1:8081/toggle >/dev/null; curl -x http://127.0.0.1:8080 --max-time 20 -sS 'http://192.168.10.55/health.php?evidence=proxy-acceptance' >/tmp/proxy-acceptance.json; echo PROXY_ACCEPTANCE_DONE");
   await page.keyboard.press("Enter");
   await page.waitForTimeout(8_000);
 

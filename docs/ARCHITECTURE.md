@@ -27,9 +27,9 @@ A generation change invalidates older asynchronous operations. Serial commands r
 
 ## Provisioning boundary
 
-The target's serial getty initially provides a hidden root control login solely so the controller can provision the session. Echo is disabled while the provisioning values are sent. Target root writes the flag and challenge, creates the session timestamp/marker, removes old proof, and seals the serial login. The seal contains Linux's boot ID: subsequent getty respawns in that boot use `lab-login`, while a genuine reboot permits the next provisioning cycle. The visible VGA console is always the unprivileged lab login.
+The target's serial getty initially provides a hidden root control login solely so the controller can provision the session. Echo is disabled while the challenge is sent. Target root generates the flag from `/dev/urandom`, writes it as `root:apache 0640`, stores the challenge, creates the session timestamp/marker, removes old proof, and returns only the flag's SHA-256 digest. The controller never sends or retains plaintext flag material. The seal contains Linux's boot ID: subsequent getty respawns in that boot use `lab-login`, while a genuine reboot permits the next provisioning cycle. The visible VGA console is always the unprivileged lab login.
 
-The browser stores a flag hash for the CTF check and keeps the provisioning secret only in memory/IndexedDB snapshot context where needed for a consistent restore. This is not an authorization boundary; it is a training exercise.
+The browser stores the flag digest for the CTF check and stores that digest with paired VM snapshots for a consistent restore. This is not an authorization boundary; it is a training exercise.
 
 ## Evidence boundary
 

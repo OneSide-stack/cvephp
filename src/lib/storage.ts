@@ -7,7 +7,6 @@ const STORES = { assets: "assets", snapshots: "snapshots", progress: "progress" 
 export interface SnapshotRecord {
   meta: SnapshotMeta;
   session: SessionInfo;
-  provisionSecret: string;
   resourceMode: ResourceMode;
   attacker: ArrayBuffer;
   target: ArrayBuffer;

@@ -74,9 +74,15 @@ case "${1:-status}" in
     ;;
   provision)
     [ "$(id -u)" = 0 ] || { echo 'provision requires the boot control context' >&2; exit 1; }
-    flag="${2:-}"; challenge="${3:-}"
-    [ ${#flag} -ge 24 ] && [ ${#flag} -le 160 ] && [ ${#challenge} -ge 16 ] && [ ${#challenge} -le 128 ] || { echo 'invalid provisioning values'; exit 2; }
-    case "$flag$challenge" in *[!A-Za-z0-9_{}-]*) echo 'unsafe provisioning characters'; exit 2;; esac
+    challenge="${2:-}"
+    [ ${#challenge} -ge 16 ] && [ ${#challenge} -le 128 ] || { echo 'invalid provisioning challenge'; exit 2; }
+    case "$challenge" in *[!A-Za-z0-9_{}-]*) echo 'unsafe provisioning characters'; exit 2;; esac
+    # Generate the secret inside this target, never in the browser or in an
+    # image layer. Return only its digest for the client-side CTF comparison.
+    random="$(od -An -N24 -tx1 /dev/urandom 2>/dev/null | tr -d '[:space:]')"
+    [ ${#random} -eq 48 ] || { echo 'target random source failed' >&2; exit 1; }
+    flag="RANGE{$random}"
+    digest="$(printf '%s' "$flag" | sha256sum | awk '{print $1}')"
     umask 027
     printf '%s\n' "$flag" >"$FLAG"
     chown root:apache "$FLAG"; chmod 0640 "$FLAG"
@@ -87,7 +93,7 @@ case "${1:-status}" in
     printf '%s\n' "$now" >/run/cyber-range/session-start
     chmod 0644 /run/cyber-range/provisioned /run/cyber-range/session-start
     rm -f "$PROOF"
-    echo 'CYBER_RANGE_FLAG_PROVISIONED'
+    printf 'CYBER_RANGE_FLAG_PROVISIONED sha256=%s\n' "$digest"
     ;;
   seal)
     [ "$(id -u)" = 0 ] || { echo 'seal requires root' >&2; exit 1; }
