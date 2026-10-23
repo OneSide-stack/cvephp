@@ -488,14 +488,15 @@ export class LabController {
       }
     }
     let detail = last instanceof Error ? last.message : String(last);
-    if (machine === "attacker") {
-      try {
-        const diagnostics = await runtime.serial.exec("printf '%s\\n' '--- proxy processes ---'; ps; printf '%s\\n' '--- proxy log ---'; cat /tmp/range-proxy.log 2>&1; printf '%s\\n' '--- proxy files ---'; ls -ld /home/tc/lab /home/tc/lab-evidence /tmp/range-proxy.log 2>&1", 10_000);
-        detail += `\nAttacker proxy diagnostics:\n${diagnostics.output.slice(-6000)}`;
-      } catch {
-        // Preserve the original readiness error if diagnostic collection also
-        // fails; never replace it with a less useful secondary exception.
-      }
+    const diagnosticCommand = machine === "attacker"
+      ? "printf '%s\\n' '--- proxy processes ---'; ps; printf '%s\\n' '--- proxy log ---'; cat /tmp/range-proxy.log 2>&1; printf '%s\\n' '--- proxy files ---'; ls -ld /home/tc/lab /home/tc/lab-evidence /tmp/range-proxy.log 2>&1"
+      : "printf '%s\\n' '--- OpenRC services ---'; rc-status --all 2>&1; rc-service apache2 status 2>&1; printf '%s\\n' '--- Apache configuration ---'; httpd -t 2>&1; ls -ld /run/apache2 /var/log/apache2 2>&1; printf '%s\\n' '--- Apache error log ---'; tail -n 80 /var/log/apache2/error.log 2>&1; printf '%s\\n' '--- kernel/system log ---'; tail -n 60 /var/log/messages 2>&1";
+    try {
+      const diagnostics = await runtime.serial.exec(diagnosticCommand, 15_000);
+      detail += `\n${machine} service diagnostics:\n${diagnostics.output.slice(-8000)}`;
+    } catch {
+      // Preserve the original readiness error if diagnostic collection also
+      // fails; never replace it with a less useful secondary exception.
     }
     throw new Error(`${machine} did not become ready: ${detail}`);
   }

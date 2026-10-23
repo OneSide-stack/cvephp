@@ -2,6 +2,7 @@ node_modules/
 dist/
 .vite/
 playwright-report/
+playwright-guest-report/
 test-results/
 *.log
 *.tsbuildinfo
