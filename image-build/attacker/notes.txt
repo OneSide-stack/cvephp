@@ -6,7 +6,7 @@ Application: custom PHP training portal, NOT WordPress.
 
 REAL TOOLS
   xterm/aterm       guest shell (use whichever icon is present)
-  dillo             graphical HTTP browser, configured for RangeProxy
+  dillo-beta        graphical HTTP browser, configured for RangeProxy
   curl / wget       HTTP clients
   ip / ping         network diagnostics
   python3           runs the local proxy and research harness

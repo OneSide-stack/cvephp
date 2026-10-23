@@ -12,7 +12,10 @@ REPOS = [
     "https://distro.ibiblio.org/tinycorelinux/11.x/x86/tcz/",
     "http://tinycorelinux.net/11.x/x86/tcz/",
 ]
-PACKAGES = ["python3.6.tcz", "curl.tcz", "dillo.tcz", "iproute2.tcz", "nano.tcz"]
+# TinyCore 11 x86 publishes Dillo 3.1 as dillo-beta.tcz; there is no
+# dillo.tcz in that repository. Keep the package name explicit so dependency
+# resolution and the on-boot list use the actual x86 artifact.
+PACKAGES = ["python3.6.tcz", "curl.tcz", "dillo-beta.tcz", "iproute2.tcz", "nano.tcz"]
 
 
 def fetch(url, path):

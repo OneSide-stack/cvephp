@@ -17,7 +17,7 @@ case "${1:-status}" in
     [ "$addr" = "192.168.10.10/24" ] && [ "$proxy" = running ]
     ;;
   tools)
-    for tool in ip ping curl wget python3 python3.6 nano vi dillo xterm aterm; do
+    for tool in ip ping curl wget python3 python3.6 nano vi dillo-beta dillo xterm aterm; do
       path="$(command -v "$tool" 2>/dev/null || true)"
       [ -n "$path" ] && printf '%s\t%s\n' "$tool" "$path"
     done
