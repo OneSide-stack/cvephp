@@ -22,6 +22,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: guest-images-${{ github.ref }}
@@ -35,6 +36,8 @@ jobs:
       SOURCE_DATE_EPOCH: 0
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -42,9 +45,36 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends curl ca-certificates tar gzip
       - name: Install JavaScript build utilities
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Reuse images when provisioning inputs are unchanged
+        id: reuse
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          echo 'reuse=false' >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" != push ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then exit 0; fi
+          if ! git diff --quiet "$BEFORE" HEAD -- image-build scripts/prepare-runtime.mjs scripts/generate-asset-manifest.mjs scripts/verify-assets.mjs public/v86 public/lab-assets/manifest.json; then exit 0; fi
+          previous="$(gh run list --workflow build-images.yml --branch "$GITHUB_REF_NAME" --status completed --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          if [ -z "$previous" ]; then exit 0; fi
+          rm -rf /tmp/cyber-range-reused-images
+          if ! gh run download "$previous" --name cyber-range-guest-images --dir /tmp/cyber-range-reused-images; then
+            echo '::warning::Previous image artifact is unavailable; rebuilding from source.'
+            exit 0
+          fi
+          if [ ! -s /tmp/cyber-range-reused-images/public/lab-assets/attacker-tinycore-11.0.iso ] || [ ! -s /tmp/cyber-range-reused-images/public/lab-assets/target-php-8.2.34.iso ]; then
+            echo '::warning::Previous artifact lacks required guests; rebuilding from source.'
+            exit 0
+          fi
+          cp -a /tmp/cyber-range-reused-images/public/. public/
+          if [ -f /tmp/cyber-range-reused-images/image-checksums.txt ]; then cp /tmp/cyber-range-reused-images/image-checksums.txt .; fi
+          echo "Reusing checksummed guest images from run $previous; provisioning inputs are unchanged."
+          echo 'reuse=true' >> "$GITHUB_OUTPUT"
       - name: Build Alpine PHP 8.2.34 target
+        if: steps.reuse.outputs.reuse != 'true'
         run: bash image-build/build-target.sh 8.2.34 target-php-8.2.34.iso
       - name: Build TinyCore graphical attacker
+        if: steps.reuse.outputs.reuse != 'true'
         run: bash image-build/build-attacker.sh
       - name: Generate and verify asset manifest
         run: node scripts/prepare-runtime.mjs && node scripts/generate-asset-manifest.mjs && node scripts/verify-assets.mjs
@@ -84,11 +114,11 @@ jobs:
           fi
       - name: Build optional Alpine PHP 8.2.35 comparison
         id: patched
-        if: github.event_name == 'push' || inputs.build_patched
+        if: steps.reuse.outputs.reuse != 'true' && (github.event_name == 'push' || inputs.build_patched)
         continue-on-error: true
         run: bash image-build/build-target.sh 8.2.35 target-php-8.2.35.iso
       - name: Clean optional comparison scratch
-        if: always() && (github.event_name == 'push' || inputs.build_patched)
+        if: always() && steps.reuse.outputs.reuse != 'true' && (github.event_name == 'push' || inputs.build_patched)
         run: |
           mkdir -p .image-build-work/target-8.2.35
           docker run --rm --platform linux/amd64 -v "$PWD/.image-build-work/target-8.2.35:/work" alpine:3.22.1 \
@@ -96,10 +126,10 @@ jobs:
           rm -rf .image-build-work/target-8.2.35
           docker image rm cyber-range-target:8.2.35 >/dev/null 2>&1 || true
       - name: Refresh manifest after optional comparison
-        if: github.event_name == 'push' || inputs.build_patched
+        if: steps.reuse.outputs.reuse != 'true' && (github.event_name == 'push' || inputs.build_patched)
         run: node scripts/generate-asset-manifest.mjs && node scripts/verify-assets.mjs
       - name: Record final artifact inventory
-        if: github.event_name == 'push' || inputs.build_patched
+        if: steps.reuse.outputs.reuse != 'true' && (github.event_name == 'push' || inputs.build_patched)
         run: |
           sha256sum public/lab-assets/*.iso public/v86/*.bin public/v86/*.wasm > image-checksums.txt
           ls -lh public/lab-assets/*.iso
@@ -108,7 +138,7 @@ jobs:
             echo '::warning::Optional PHP 8.2.35 comparison failed; see its build log. Required images and acceptance are independent.'
           fi
       - name: Upload final guest images and manifest
-        if: github.event_name == 'push' || inputs.build_patched
+        if: steps.reuse.outputs.reuse != 'true' && (github.event_name == 'push' || inputs.build_patched)
         uses: actions/upload-artifact@v4
         with:
           name: cyber-range-guest-images

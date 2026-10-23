@@ -15,7 +15,15 @@ test("real dual guests provide network, HTTP, telemetry, and proxy evidence", as
   await expect(page.locator(".preflight-list .text-success")).toHaveCount(3);
 
   await page.getByRole("button", { name: "Start lab", exact: true }).first().click();
-  await expect(page.locator(".brand-right .status-pill")).toHaveText("Ready", { timeout: 15 * 60 * 1000 });
+  const labStatus = page.locator(".brand-right .status-pill");
+  await page.waitForFunction(() => {
+    const status = document.querySelector(".brand-right .status-pill")?.textContent?.trim();
+    return status === "Ready" || status === "Failed";
+  }, undefined, { timeout: 15 * 60 * 1000 });
+  if ((await labStatus.textContent())?.trim() !== "Ready") {
+    throw new Error((await page.getByRole("alert").textContent())?.trim() || "Lab startup failed");
+  }
+  await expect(labStatus).toHaveText("Ready");
   await expect(page.locator("#vm-attacker .vm-statusbar .status-pill")).toHaveText("Ready");
   await expect(page.locator("#vm-target .vm-statusbar .status-pill")).toHaveText("Ready");
   await expect(page.locator("#vm-attacker canvas")).toBeVisible();

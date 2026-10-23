@@ -461,7 +461,10 @@ export class LabController {
     const runtime = this.runtime[machine];
     if (!runtime) throw new Error(`${machine} is not running`);
     let last: unknown;
-    for (let attempt = 0; attempt < 6; attempt += 1) {
+    // A refused management connection returns immediately. Keep polling the
+    // real socket long enough for Tiny Core's asynchronous package/service
+    // startup instead of exhausting all retries in only a few seconds.
+    for (let attempt = 0; attempt < 20; attempt += 1) {
       try {
         const result = await runtime.serial.exec("labctl ready", 25_000);
         const info = jsonFromOutput<Record<string, string>>(result.output);
@@ -484,7 +487,17 @@ export class LabController {
         await sleep(1_500);
       }
     }
-    throw new Error(`${machine} did not become ready: ${last instanceof Error ? last.message : String(last)}`);
+    let detail = last instanceof Error ? last.message : String(last);
+    if (machine === "attacker") {
+      try {
+        const diagnostics = await runtime.serial.exec("printf '%s\\n' '--- proxy processes ---'; ps; printf '%s\\n' '--- proxy log ---'; cat /tmp/range-proxy.log 2>&1; printf '%s\\n' '--- proxy files ---'; ls -ld /home/tc/lab /home/tc/lab-evidence /tmp/range-proxy.log 2>&1", 10_000);
+        detail += `\nAttacker proxy diagnostics:\n${diagnostics.output.slice(-6000)}`;
+      } catch {
+        // Preserve the original readiness error if diagnostic collection also
+        // fails; never replace it with a less useful secondary exception.
+      }
+    }
+    throw new Error(`${machine} did not become ready: ${detail}`);
   }
 
   private requireSerial(machine: MachineId): SerialChannel {
