@@ -6,7 +6,11 @@ RUN apk add --no-cache build-base autoconf automake libtool bison re2c apache2-d
 COPY image-build/downloads/php-${PHP_VERSION}.tar.gz /usr/src/php.tar.gz
 RUN mkdir -p /usr/src/php && tar -xzf /usr/src/php.tar.gz -C /usr/src/php --strip-components=1
 WORKDIR /usr/src/php
+# Docker's linux/386 userspace can still see an x86_64 uname. Pin both
+# triplets so Zend selects the i386 assembly that matches the musl compiler.
 RUN ./buildconf --force && ./configure \
+    --build=i686-pc-linux-musl \
+    --host=i686-pc-linux-musl \
     --prefix=/usr/local \
     --with-apxs2=/usr/bin/apxs \
     --with-config-file-path=/etc/php \
@@ -69,7 +73,7 @@ RUN { \
       echo "php_source_version=${PHP_VERSION}"; \
       echo "php_source_sha256=${PHP_SOURCE_SHA256}"; \
       echo 'php_sapi=Apache 2.0 handler (mod_php), prefork'; \
-      echo 'php_configure=--disable-all --enable-session --enable-filter --disable-cgi --disable-phpdbg --with-apxs2=/usr/bin/apxs'; \
+      echo 'php_configure=--build=i686-pc-linux-musl --host=i686-pc-linux-musl --disable-all --enable-session --enable-filter --disable-cgi --disable-phpdbg --with-apxs2=/usr/bin/apxs'; \
       echo "libphp_sha256=$(sha256sum /usr/lib/apache2/libphp.so | awk '{print $1}')"; \
       echo "source_date_epoch=${BUILD_EPOCH}"; \
       echo 'cve_reproduction_status=unverified-for-this-32-bit-build'; \
