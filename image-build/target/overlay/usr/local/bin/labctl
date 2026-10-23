@@ -28,7 +28,7 @@ case "${1:-status}" in
     echo "$health" | grep -q '"php_sapi": "apache2handler"' && mode=apache2handler
     printf '{"machine":"target","os":"Alpine Linux %s","arch":"%s","address":"%s","apache":"%s","php_sapi":"%s","php_version":"%s"}\n' \
       "$(cat /etc/alpine-release)" "$(uname -m)" "$addr" "$(test -n "$pids" && echo running || echo stopped)" "$mode" "$(/usr/local/bin/php -r 'echo PHP_VERSION;')"
-    [ "$addr" = "192.168.10.55/24" ] && [ -n "$pids" ] && [ "$mode" = apache2handler ] && [ -f "$FLAG" ] && ! grep -q UNPROVISIONED "$FLAG"
+    [ "$addr" = "192.168.10.55/24" ] && [ -n "$pids" ] && [ "$mode" = apache2handler ] && [ -f "$FLAG" ] && [ -f /run/cyber-range/provisioned ]
     ;;
   telemetry)
     total="$(mem_value MemTotal)"; available="$(mem_value MemAvailable)"
@@ -82,14 +82,20 @@ case "${1:-status}" in
     chown root:apache "$FLAG"; chmod 0640 "$FLAG"
     printf '%s' "$challenge" >/run/cyber-range/challenge
     chmod 0600 /run/cyber-range/challenge
+    now="$(date +%s)"
+    printf '%s\n' "$now" >/run/cyber-range/provisioned
+    printf '%s\n' "$now" >/run/cyber-range/session-start
+    chmod 0644 /run/cyber-range/provisioned /run/cyber-range/session-start
     rm -f "$PROOF"
     echo 'CYBER_RANGE_FLAG_PROVISIONED'
     ;;
   seal)
     [ "$(id -u)" = 0 ] || { echo 'seal requires root' >&2; exit 1; }
-    # The frontend executes this as the final provisioning action. The current
-    # serial shell becomes an unprivileged user; the visible VGA console is
-    # already unprivileged. No root target shell is presented to the learner.
+    # The frontend executes this as the final provisioning action. Bind the
+    # seal to this Linux boot ID: future serial getty respawns become lab, a
+    # real reboot permits reprovisioning, and a restored snapshot stays sealed.
+    cat /proc/sys/kernel/random/boot_id >/run/cyber-range/sealed || exit 1
+    chmod 0644 /run/cyber-range/sealed
     exec /bin/su - lab
     ;;
   *)

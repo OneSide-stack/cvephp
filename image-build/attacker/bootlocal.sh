@@ -11,6 +11,10 @@ grep -q 'assessment-target' /etc/hosts || echo '192.168.10.55 assessment-target'
 mkdir -p /home/tc/lab-evidence
 chown -R tc:staff /home/tc/lab-evidence /home/tc/lab 2>/dev/null || chown -R tc:tc /home/tc/lab-evidence /home/tc/lab 2>/dev/null || true
 PY="$(command -v python3 || command -v python3.6 || true)"
+if ! command -v python3 >/dev/null 2>&1 && command -v python3.6 >/dev/null 2>&1; then
+  ln -sf "$(command -v python3.6)" /usr/local/bin/python3
+  PY="$(command -v python3)"
+fi
 if [ -n "$PY" ] && ! pidof range_proxy.py >/dev/null 2>&1; then
   su tc -c "nohup $PY /home/tc/lab/range_proxy.py >/tmp/range-proxy.log 2>&1 &"
 fi

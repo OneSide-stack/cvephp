@@ -1,5 +1,11 @@
 #!/bin/sh
-# Used only on the hidden serial provisioning channel during boot.
+# Root is available only for the initial provisioning of this boot. Once the
+# controller seals the channel, every respawn (including after `exit`) is lab.
+boot_id="$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || true)"
+sealed_boot="$(cat /run/cyber-range/sealed 2>/dev/null || true)"
+if [ -n "$boot_id" ] && [ "$boot_id" = "$sealed_boot" ]; then
+  exec /usr/local/bin/lab-login
+fi
 export HOME=/root
 cd /root
 exec /bin/login -f root

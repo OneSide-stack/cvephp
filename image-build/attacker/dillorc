@@ -1,6 +1,7 @@
-# Dillo uses the real guest proxy for plain HTTP. No Internet exception exists.
+# Dillo uses the real guest proxy for plain HTTP. Only the proxy's own loopback
+# management UI is exempt; the assessment target is never added to no_proxy.
 http_proxy=http://127.0.0.1:8080/
-no_proxy=""
+no_proxy="localhost 127.0.0.1"
 start_page=http://127.0.0.1:8081/
 show_url=yes
 show_extra_warnings=yes

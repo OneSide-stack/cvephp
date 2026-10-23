@@ -9,6 +9,7 @@ from __future__ import print_function
 import base64
 import json
 import os
+import re
 import socket
 import socketserver
 import sys
@@ -33,6 +34,7 @@ INTERCEPT_TIMEOUT = 180
 EVIDENCE_DIR = os.path.expanduser(os.environ.get("RANGE_EVIDENCE_DIR", "~/lab-evidence"))
 EVIDENCE_FILE = os.path.join(EVIDENCE_DIR, "requests.jsonl")
 HOP_HEADERS = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade"}
+TOKEN = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+\Z")
 
 
 def utcnow():
@@ -115,8 +117,10 @@ def parse_headers(head):
         method, target, version = lines[0].decode("ascii").split(" ")
     except (UnicodeDecodeError, ValueError):
         raise ValueError("request line must be ASCII: METHOD target HTTP/version")
-    if not method or not version.startswith("HTTP/1."):
+    if not method or not TOKEN.match(method) or version not in ("HTTP/1.0", "HTTP/1.1"):
         raise ValueError("unsupported HTTP request line")
+    if not target or any(ord(char) < 33 or ord(char) == 127 for char in target):
+        raise ValueError("request target contains a control character")
     headers = []
     for line in lines[1:]:
         if not line or line[:1] in (b" ", b"\t") or b":" not in line:
@@ -125,9 +129,15 @@ def parse_headers(head):
         if not name or name.strip() != name:
             raise ValueError("invalid HTTP header name whitespace")
         try:
-            headers.append((name.decode("ascii"), value.strip().decode("latin-1")))
+            decoded_name = name.decode("ascii")
+            decoded_value = value.strip().decode("latin-1")
         except UnicodeDecodeError:
             raise ValueError("non-ASCII HTTP header name")
+        if not TOKEN.match(decoded_name):
+            raise ValueError("invalid HTTP header name token")
+        if any((ord(char) < 32 and char != "\t") or ord(char) == 127 for char in decoded_value):
+            raise ValueError("HTTP header value contains a control character")
+        headers.append((decoded_name, decoded_value))
     return method, target, version, headers
 
 
@@ -139,19 +149,26 @@ def validate_target(target, headers):
     values = header_values(headers, "host")
     if len(values) != 1:
         raise ValueError("exactly one Host header is required")
+    authority = urlsplit("http://" + values[0])
+    if authority.username or authority.password or authority.path or authority.query or authority.fragment:
+        raise ValueError("Host must contain only an HTTP authority")
+    header_host = authority.hostname
+    header_port = authority.port or 80
     if target.startswith("http://") or target.startswith("https://"):
         parsed = urlsplit(target)
         if parsed.scheme != "http":
             raise ValueError("only plain HTTP is supported; CONNECT/TLS is disabled")
+        if parsed.username or parsed.password or parsed.fragment:
+            raise ValueError("credentials and fragments are not valid in an HTTP request target")
         host = parsed.hostname
         port = parsed.port or 80
+        if (header_host, header_port) != (host, port):
+            raise ValueError("absolute request target and Host authority disagree")
     else:
         if not target.startswith("/"):
             raise ValueError("only origin-form or absolute HTTP request targets are supported")
-        host_header = values[0]
-        parsed = urlsplit("http://" + host_header)
-        host = parsed.hostname
-        port = parsed.port or 80
+        host = header_host
+        port = header_port
     if host != TARGET_HOST or port != TARGET_PORT:
         raise ValueError("destination refused: this proxy is confined to %s:%d" % (TARGET_HOST, TARGET_PORT))
 

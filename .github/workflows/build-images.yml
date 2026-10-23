@@ -40,7 +40,7 @@ jobs:
       - name: Build Alpine PHP 8.2.34 target
         run: bash image-build/build-target.sh 8.2.34 target-php-8.2.34.iso
       - name: Build Alpine PHP 8.2.35 patched comparison
-        if: inputs.build_patched
+        if: github.event_name == 'push' || inputs.build_patched
         run: bash image-build/build-target.sh 8.2.35 target-php-8.2.35.iso
       - name: Generate and verify asset manifest
         run: node scripts/prepare-runtime.mjs && node scripts/generate-asset-manifest.mjs && node scripts/verify-assets.mjs

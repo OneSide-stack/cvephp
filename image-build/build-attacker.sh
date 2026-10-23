@@ -8,7 +8,10 @@ BASE="$DOWNLOADS/TinyCore-11.0.iso"
 BASE_SHA256=778fc3788d9df3de72970827968b2b195aca827401db6f6f9cbdb737d4300bda
 mkdir -p "$DOWNLOADS" "$WORK" "$(dirname "$OUT")"
 if [[ ! -s "$BASE" ]]; then
-  curl -fL --retry 4 --retry-delay 2 "https://distro.ibiblio.org/tinycorelinux/11.x/x86/release/TinyCore-11.0.iso" -o "$BASE"
+  # The publisher now retains only 11.1 in this directory. Keep the lab on its
+  # documented 11.0 profile and authenticate this immutable third-party mirror
+  # with the independently recorded digest below; never follow a floating ISO.
+  curl -fL --retry 4 --retry-delay 2 "https://github.com/alizafarbati/WebLinux/raw/9be9b5f435281dc7d78467131dbc1b77e10a8198/images/TinyCore-11.0.iso" -o "$BASE"
 fi
 echo "$BASE_SHA256  $BASE" | sha256sum -c -
 python3 "$ROOT/image-build/fetch-tinycore.py"
