@@ -450,6 +450,10 @@ export class LabController {
     // telemetry commands run as the unprivileged Alpine 'lab' account.
     serial.sendRaw("labctl seal\n");
     await serial.waitFor(/[$] /, 15_000, false);
+    const identity = await serial.exec("id -un", 10_000);
+    if (identity.exitCode !== 0 || identity.output.trim() !== "lab") {
+      throw new Error(`Target serial seal did not produce the unprivileged lab context: ${identity.output}`);
+    }
     this.log("Target flag provisioned with root:apache 0640 permissions; hidden boot shell sealed to the lab user.");
   }
 

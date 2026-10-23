@@ -28,7 +28,7 @@ case "${1:-status}" in
     echo "$health" | grep -q '"php_sapi": "apache2handler"' && mode=apache2handler
     printf '{"machine":"target","os":"Alpine Linux %s","arch":"%s","address":"%s","apache":"%s","php_sapi":"%s","php_version":"%s"}\n' \
       "$(cat /etc/alpine-release)" "$(uname -m)" "$addr" "$(test -n "$pids" && echo running || echo stopped)" "$mode" "$(/usr/local/bin/php -r 'echo PHP_VERSION;')"
-    [ "$addr" = "192.168.10.55/24" ] && [ -n "$pids" ] && [ "$mode" = apache2handler ] && [ -f "$FLAG" ] && [ -f /run/cyber-range/provisioned ]
+    [ "$addr" = "192.168.10.55/24" ] && [ -n "$pids" ] && [ "$mode" = apache2handler ] && [ -f "$FLAG" ] && [ -f /run/cyber-range/provisioned ] && [ -f /run/cyber-range/sealed ] && [ "$(id -u)" -ne 0 ]
     ;;
   telemetry)
     total="$(mem_value MemTotal)"; available="$(mem_value MemAvailable)"

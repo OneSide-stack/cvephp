@@ -20,6 +20,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: guest-images-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   images:
     runs-on: ubuntu-latest

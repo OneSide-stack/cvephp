@@ -38,7 +38,8 @@ Never edit a digest to make a changed image pass. Rebuild the manifest from the 
 The 11.0 publisher directory now retains 11.1 rather than the original 11.0 ISO. To avoid silently changing the lab profile, the script uses this immutable mirror:
 
 ```text
-https://github.com/alizafarbati/WebLinux/raw/9be9b5f435281dc7d78467131dbc1b77e10a8198/images/TinyCore-11.0.iso
+https://api.github.com/repos/alizafarbati/WebLinux/git/blobs/45166e33208626dc6074f20ba0dbd8824d113358
+(with HTTP Accept: application/vnd.github.raw+json; blob pinned by commit 9be9b5f435281dc7d78467131dbc1b77e10a8198)
 SHA-256: 778fc3788d9df3de72970827968b2b195aca827401db6f6f9cbdb737d4300bda
 Size: 19,922,944 bytes
 ```

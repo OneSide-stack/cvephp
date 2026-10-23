@@ -11,7 +11,7 @@ if [[ ! -s "$BASE" ]]; then
   # The publisher now retains only 11.1 in this directory. Keep the lab on its
   # documented 11.0 profile and authenticate this immutable third-party mirror
   # with the independently recorded digest below; never follow a floating ISO.
-  curl -fL --retry 4 --retry-delay 2 "https://github.com/alizafarbati/WebLinux/raw/9be9b5f435281dc7d78467131dbc1b77e10a8198/images/TinyCore-11.0.iso" -o "$BASE"
+  curl -fL --retry 4 --retry-delay 2 -H 'Accept: application/vnd.github.raw+json' "https://api.github.com/repos/alizafarbati/WebLinux/git/blobs/45166e33208626dc6074f20ba0dbd8824d113358" -o "$BASE"
 fi
 echo "$BASE_SHA256  $BASE" | sha256sum -c -
 python3 "$ROOT/image-build/fetch-tinycore.py"

@@ -146,7 +146,7 @@ For real acceptance, boot both images and record the checks in [docs/ACCEPTANCE.
 - v86 runtime: npm `v86@0.5.472`; upstream source reviewed at `cc37f35c43bf14865d74ad76879ecf9410f69eb1`.
 - PHP sources: official `php/php-src` tags with SHA-256 pins in `image-build/target/php-source.sha256`.
 - Alpine media: official release ISO plus its published SHA-256, downloaded during the image build.
-- Tiny Core 11.0 base media: the publisher's current directory no longer carries 11.0. The build uses an immutable GitHub mirror at commit `9be9b5f435281dc7d78467131dbc1b77e10a8198` and requires SHA-256 `778fc3788d9df3de72970827968b2b195aca827401db6f6f9cbdb737d4300bda`. This is a provenance/compatibility pin, not a claim of independent security audit.
+- Tiny Core 11.0 base media: the publisher's current directory no longer carries 11.0. The build uses an immutable GitHub blob at commit `9be9b5f435281dc7d78467131dbc1b77e10a8198` (retrieved through the GitHub raw-blob API) and requires SHA-256 `778fc3788d9df3de72970827968b2b195aca827401db6f6f9cbdb737d4300bda`. This is a provenance/compatibility pin, not a claim of independent security audit.
 - Vulnerability reference: [official PHP advisory GHSA-w8hw-w9fx-j79w](https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w). Public exploit notes for other builds/architectures are not transferable proof for this target.
 
 ## License and safety
