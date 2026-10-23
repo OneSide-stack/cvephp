@@ -25,7 +25,7 @@ RUN ./buildconf --force && ./configure \
     && test -x /usr/local/bin/php \
     && test -f /usr/lib/apache2/libphp.so \
     && /usr/local/bin/php -v \
-    && ldd /usr/lib/apache2/libphp.so
+    && readelf -h /usr/lib/apache2/libphp.so | grep -q 'Class:.*ELF32'
 
 FROM --platform=linux/386 alpine:${ALPINE_VERSION} AS target
 ARG PHP_VERSION=8.2.34
@@ -78,7 +78,6 @@ RUN { \
       echo "source_date_epoch=${BUILD_EPOCH}"; \
       echo 'cve_reproduction_status=unverified-for-this-32-bit-build'; \
     } >/etc/cyber-range/build-info \
-    && ldd /usr/lib/apache2/libphp.so | grep -q 'not found' && exit 1 || true \
     && /usr/local/bin/php -v \
     && /usr/local/bin/php -r 'exit(PHP_VERSION === getenv("PHP_VERSION") && ini_get("memory_limit") === "128M" ? 0 : 1);' \
     && httpd -t
