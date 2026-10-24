@@ -105,8 +105,8 @@ test("real dual guests provide isolated network, HTTP, and target telemetry", as
       expect(accessLog).toContain(" 200 ");
       await testInfo.attach("target-apache-access.log", { body: accessLog, contentType: "text/plain" });
 
-      await page.getByRole("button", { name: /^EVIDENCE & REPORT/ }).click();
-      const responseRecord = page.locator(".evidence-record").filter({ hasText: "Learner baseline request" }).first();
+      await page.getByRole("button", { name: "VULNERABILITY LAB", exact: true }).click();
+      const responseRecord = page.locator(".lab-evidence-panel .evidence-record").filter({ hasText: "Learner baseline request" }).first();
       await responseRecord.locator("summary").click();
       const response = await responseRecord.locator(".evidence-data pre").innerText();
       expect(response).toMatch(/HTTP\/1\.[01] 200/);

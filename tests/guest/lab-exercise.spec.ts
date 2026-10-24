@@ -70,6 +70,10 @@ test("practical lab workflow is guest-backed, gated, resettable and honest about
   await runAction(page, "Baseline testing", "Send baseline requests");
   await expectVerified(page, "Baseline testing");
   await expect(step(page, "Baseline testing")).toContainText("corroborated in the target access log");
+  // The captured response must be the real target document, not a placeholder.
+  const baselineRecord = page.locator(".lab-evidence-panel .evidence-record").filter({ hasText: "Baseline POST" }).first();
+  await baselineRecord.locator("summary").click();
+  await expect(baselineRecord.locator(".evidence-data pre")).toContainText("Training credentials accepted");
 
   // 3. Request analysis — real proxy forward and a modified POST.
   await runAction(page, "Request analysis", "Analyse through RangeProxy");
@@ -134,7 +138,7 @@ test("practical lab workflow is guest-backed, gated, resettable and honest about
   await expect(page.getByText("Simulation only")).toHaveCount(0);
   const digestAfter = (await page.locator(".key-value", { hasText: "Flag SHA-256" }).locator("strong").innerText()).trim();
   expect(digestAfter).not.toBe(digestBefore);
-  await expect(page.locator(".target-identity")).toContainText("Alpine");
+  await expect(page.locator(".lab-side")).toContainText("Target not inspected");
 
   expect(pageErrors).toEqual([]);
 });

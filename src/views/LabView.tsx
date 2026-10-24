@@ -60,6 +60,10 @@ export function LabView() {
   const simulated = state.completedAs === "simulated-exercise";
   const simulation = exercise.simulation;
   const build = exercise.build;
+  const httpEvidence = useMemo(
+    () => state.evidence.filter((record) => ["http", "proxy", "log", "rce-proof"].includes(record.category)).slice(0, 10),
+    [state.evidence],
+  );
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -227,6 +231,27 @@ export function LabView() {
         </div> : <EmptyState icon={<FlaskConical size={24} />} title="No probe yet">Step 5 sends one bounded multipart probe from the attacker guest. Its outcome is recorded even when nothing interesting happens.</EmptyState>}
       </Panel>
     </div>
+
+    <Panel
+      eyebrow="RAW GUEST HTTP EVIDENCE"
+      title="Responses this exercise actually captured"
+      action={<ScrollText size={17} />}
+      className="lab-evidence-panel"
+    >
+      {httpEvidence.length ? <div className="evidence-list">{httpEvidence.map((record) => <details className="evidence-record" key={record.id}>
+        <summary>
+          <span className={`evidence-category ${record.category}`}>{record.category}</span>
+          <div><strong>{record.title}</strong><span>{record.source}</span></div>
+          <time>{formatDateTime(record.timestamp)}</time>
+          <ChevronRight size={15} className="details-chevron" />
+        </summary>
+        <div className="evidence-data">
+          <div className="evidence-provenance"><ShieldCheck size={14} />Guest-derived record · {record.machine} · {record.id}</div>
+          <pre>{record.data}</pre>
+        </div>
+      </details>)}</div> : <EmptyState icon={<ScrollText size={24} />} title="No HTTP evidence yet">Steps 1–3 store the raw responses and target log lines they received. Nothing is synthesised here.</EmptyState>}
+      <p className="panel-footnote">This is a working set for the exercise, not a reporting product. Only the latest 10 HTTP, proxy, and target-side records are shown.</p>
+    </Panel>
 
     {exercise.targetVerification && <Panel eyebrow="TARGET-SIDE VERIFICATION" title="Independent guest state" action={<ShieldCheck size={17} />}>
       <div className="verification-grid">

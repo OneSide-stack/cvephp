@@ -1239,17 +1239,21 @@ export class LabController {
       if (generation !== this.generation) return;
       const workerList = (output: string) => output.trim().split(/\s+/).filter(Boolean);
       const workersBeforePids = workerList(before.output);
-      const timeout = Math.min(900_000, 120_000 + mib * 20_000);
+      const timeout = Math.min(900_000, 180_000 + mib * 45_000);
       // The raw evidence file can hold a 256 KiB response preview. Extract a
       // bounded, valid JSON summary in the guest so serial framing stays intact.
       const probe = await this.requireSerial("attacker").exec(
-        `python3 ~/exploit.py oom-probe --mib ${mib}${mib > 32 ? " --i-understand-oom" : ""}; latest=$(ls -t /home/tc/lab-evidence/probe-oom-*.json 2>/dev/null | head -1); echo "EVIDENCE_FILE=$latest"; if [ -n "$latest" ]; then python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));r=d.get("response_preview_latin1","");print(json.dumps({"response_preview":r[:4000],"response_bytes":d.get("response_bytes"),"transport_error":d.get("transport_error"),"elapsed_ms":d.get("elapsed_ms"),"rce_claimed":d.get("rce_claimed")}))' "$latest"; fi`,
+        `python3 ~/exploit.py oom-probe --mib ${mib}${mib > 32 ? " --i-understand-oom" : ""}; latest=$(ls -t /home/tc/lab-evidence/probe-oom-*.json 2>/dev/null | head -1); echo "EVIDENCE_FILE=$latest"; if [ -n "$latest" ]; then python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));r=d.get("response_preview_latin1","");print("CR_PROBE_JSON "+json.dumps({"response_preview":r[:4000],"response_bytes":d.get("response_bytes"),"transport_error":d.get("transport_error"),"elapsed_ms":d.get("elapsed_ms"),"rce_claimed":d.get("rce_claimed")}))' "$latest"; fi`,
         timeout,
       );
       if (generation !== this.generation) return;
       const evidenceFile = /EVIDENCE_FILE=(\S+)/.exec(probe.output)?.[1] ?? "";
       if (!evidenceFile) throw new Error(`The guest research harness produced no evidence file: ${probe.output.slice(-1200)}`);
-      const record = jsonFromOutput<{ response_preview?: string; transport_error?: string | null; elapsed_ms?: number; response_bytes?: number; rce_claimed?: boolean }>(probe.output);
+      // Take the marked summary line only: the harness also prints the HTTP
+      // response, which could itself contain JSON.
+      const summaryLine = probe.output.split("\n").find((line) => line.trim().startsWith("CR_PROBE_JSON "));
+      if (!summaryLine) throw new Error(`The guest did not return a probe summary: ${probe.output.slice(-800)}`);
+      const record = JSON.parse(summaryLine.trim().slice("CR_PROBE_JSON ".length)) as { response_preview?: string; transport_error?: string | null; elapsed_ms?: number; response_bytes?: number; rce_claimed?: boolean };
       const response = record.response_preview ?? "";
       if (record.rce_claimed === true) throw new Error("The guest harness reported an RCE claim; this lab does not accept harness claims as exploitation evidence.");
       const after = await this.command("target", "pidof httpd || true; printf '\\n'; labctl telemetry", 30_000);
