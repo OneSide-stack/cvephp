@@ -108,6 +108,11 @@ export function apacheRequestMatches(line: string, method: string, path: string)
   return line.includes(`\"${method} ${path} HTTP/`) || line.includes(`\"${method} http://192.168.10.55${path} HTTP/`);
 }
 
+export function managementRequestBody(raw: string, id?: string): string {
+  const encode = (value: string) => encodeURIComponent(value).replace(/'/g, "%27");
+  return `raw=${encode(raw)}${id === undefined ? "" : `&id=${encode(id)}`}`;
+}
+
 function managementStatus(output: string): number {
   const match = output.match(/PROXY_HTTP_STATUS:(\d+)/);
   if (!match) throw new Error(`Management response had no bounded curl status: ${output.slice(-800)}`);
@@ -255,18 +260,12 @@ export class ProxyAcceptanceRunner {
     return { raw: decodeManagementTextarea(result.output, 24), html: result.output };
   }
 
-  private async writeRaw(raw: string, path = "/tmp/proxy-acceptance-request.raw"): Promise<void> {
-    const encoded = btoa(raw);
-    // TinyCore's BusyBox profile does not include a base64 applet. Python is
-    // already required and inventoried for RangeProxy, so use its standard
-    // library rather than adding a package or rebuilding the verified image.
-    await this.command("attacker", `PY=$(command -v python3 || command -v python3.6) || exit 1; printf '%s' '${encoded}' | "$PY" -c 'import base64,sys; open("${path}","wb").write(base64.b64decode(sys.stdin.read()))'`, 15_000);
-  }
-
   private async postRaw(action: "/forward" | "/repeater", raw: string, id?: string, curlTimeout = 20, commandTimeout = 30_000): Promise<string> {
-    await this.writeRaw(raw);
-    const idField = id ? ` --data-urlencode 'id=${id}'` : "";
-    const result = await this.command("attacker", `${MANAGEMENT} -sS --max-time ${curlTimeout} -w '\\nPROXY_HTTP_STATUS:%{http_code}\\n'${idField} --data-urlencode 'raw@/tmp/proxy-acceptance-request.raw' '${MANAGEMENT_URL}${action}'`, commandTimeout);
+    // Send the exact edited bytes as an ASCII form payload. This avoids a
+    // temporary file and another Python process on the software-emulated guest
+    // while preserving every CR/LF through percent encoding.
+    const body = managementRequestBody(raw, id);
+    const result = await this.command("attacker", `${MANAGEMENT} -sS --max-time ${curlTimeout} -w '\\nPROXY_HTTP_STATUS:%{http_code}\\n' --data '${body}' '${MANAGEMENT_URL}${action}'`, commandTimeout);
     return result.output;
   }
 

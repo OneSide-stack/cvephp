@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { apacheRequestMatches, decodeManagementTextarea, editDefaultRepeaterRequest, evidenceRequest, oneDistinctApacheLine, parseProxyEvidence } from "../src/lib/ProxyAcceptance";
+import { apacheRequestMatches, decodeManagementTextarea, editDefaultRepeaterRequest, evidenceRequest, managementRequestBody, oneDistinctApacheLine, parseProxyEvidence } from "../src/lib/ProxyAcceptance";
 
 const DEFAULT_RAW = "GET /health.php HTTP/1.1\r\nHost: 192.168.10.55\r\nUser-Agent: RangeRepeater/1.0\r\nAccept: */*\r\nConnection: close\r\n\r\n";
 
@@ -17,6 +17,16 @@ describe("real proxy acceptance helpers", () => {
     expect(raw).toBe("POST /health.php?evidence=repeater-test-123 HTTP/1.1\r\nHost: 192.168.10.55\r\nUser-Agent: RangeRepeaterAcceptance/1.0\r\nX-Proxy-Acceptance: repeater-test-123\r\nContent-Length: 0\r\nAccept: */*\r\nConnection: close\r\n\r\n");
     expect(raw.replace(/\r\n/g, "")).not.toContain("\n");
     expect(() => editDefaultRepeaterRequest("GET /other HTTP/1.1\r\n\r\n", "x")).toThrow("method and URL");
+  });
+
+  it("round-trips exact raw CRLF and delimiters through the management form", () => {
+    const raw = "POST /health.php?x=1&y=2 HTTP/1.1\r\nHost: 192.168.10.55\r\nX-Test: '%=+&\r\nContent-Length: 4\r\n\r\nbody";
+    const body = managementRequestBody(raw, "held'id");
+    expect(body).not.toContain("'");
+    const fields = new URLSearchParams(body);
+    expect(fields.get("raw")).toBe(raw);
+    expect(fields.get("id")).toBe("held'id");
+    expect(fields.get("raw")?.replace(/\r\n/g, "")).not.toContain("\n");
   });
 
   it("deduplicates only identical Apache log occurrences, never distinct requests", () => {
