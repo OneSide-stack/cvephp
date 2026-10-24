@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeManagementTextarea, editDefaultRepeaterRequest, evidenceRequest, oneDistinctApacheLine, parseProxyEvidence } from "../src/lib/ProxyAcceptance";
+import { apacheRequestMatches, decodeManagementTextarea, editDefaultRepeaterRequest, evidenceRequest, oneDistinctApacheLine, parseProxyEvidence } from "../src/lib/ProxyAcceptance";
 
 const DEFAULT_RAW = "GET /health.php HTTP/1.1\r\nHost: 192.168.10.55\r\nUser-Agent: RangeRepeater/1.0\r\nAccept: */*\r\nConnection: close\r\n\r\n";
 
@@ -22,6 +22,10 @@ describe("real proxy acceptance helpers", () => {
   it("deduplicates only identical Apache log occurrences, never distinct requests", () => {
     const line = `192.168.10.10 - - [now] "GET /?evidence=apache-marker HTTP/1.1" 200 123 "-" "Dillo" pid=42`;
     expect(oneDistinctApacheLine(`${line}\n${line}`, "apache-marker")).toEqual({ line, occurrences: 2 });
+    expect(apacheRequestMatches(line, "GET", "/?evidence=apache-marker")).toBe(true);
+    expect(apacheRequestMatches(line.replace(`\"GET /?evidence`, `\"GET http://192.168.10.55/?evidence`), "GET", "/?evidence=apache-marker")).toBe(true);
+    expect(apacheRequestMatches(line, "POST", "/?evidence=apache-marker")).toBe(false);
+    expect(apacheRequestMatches(line, "GET", "/other")).toBe(false);
     expect(() => oneDistinctApacheLine(`${line}\n${line.replace("pid=42", "pid=43")}`, "apache-marker")).toThrow("2 distinct lines");
     expect(() => oneDistinctApacheLine("unrelated", "apache-marker")).toThrow("0 distinct lines");
   });
