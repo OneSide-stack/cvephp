@@ -38,6 +38,7 @@ export function AttackerView() {
               </button>
             </div>
             <button className="button secondary full-width" onClick={() => void controller.runBaseline()} disabled={!ready || Boolean(state.operation)}><ScanLine size={15} />Run guest baseline request</button>
+            <button className="button secondary full-width" onClick={() => void controller.runProxyBaseline()} disabled={!ready || state.proxyStatus !== "running" || Boolean(state.operation)} title="Guest curl through RangeProxy, with target log corroboration"><Waypoints size={15} />Run guest proxy request</button>
           </Panel>
 
           <Panel eyebrow="VERIFIED IN-GUEST" title="Binary inventory" action={<Wrench size={16} />}>

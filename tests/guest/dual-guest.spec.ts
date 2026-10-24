@@ -51,35 +51,32 @@ test("real dual guests provide network, HTTP, telemetry, and proxy evidence", as
   await expect(page.locator(".logs-panel")).toContainText("evidence=learner-");
   await expect(page.locator(".logs-panel")).toContainText("192.168.10.10");
 
-  // Type into the actual attacker serial shell. Disable the proxy's default
-  // intercept mode through its real loopback management socket, then send the
-  // request by guest curl through RangeProxy—not by Playwright or React.
+  // This product action uses the real attacker serial shell to inspect the
+  // management state and run guest curl through RangeProxy. It then reads the
+  // actual target log; neither Playwright nor React performs the HTTP request.
   await page.getByRole("button", { name: "ATTACKER WORKSTATION", exact: true }).click();
-  await page.locator("#vm-attacker").getByRole("button", { name: "Serial", exact: true }).click();
-  await expect(page.locator("#vm-attacker .serial-terminal")).toBeVisible();
-  await page.locator("#vm-attacker .serial-terminal").click();
-  await page.keyboard.type("curl --noproxy '*' --max-time 5 -sS -X POST -d '' http://127.0.0.1:8081/toggle >/dev/null; curl -x http://127.0.0.1:8080 --max-time 20 -fsS 'http://192.168.10.55/health.php?evidence=proxy-acceptance' >/tmp/proxy-acceptance.json; echo PROXY_ACCEPTANCE_DONE");
-  await page.keyboard.press("Enter");
-  // Both guest commands are bounded above (5 + 20 seconds). Allow them to
-  // finish before asking either guest for evidence instead of racing the proxy.
-  await page.waitForTimeout(27_000);
+  await page.getByRole("button", { name: "Run guest proxy request", exact: true }).click();
+  await expect(page.locator(".global-message")).toContainText(/RangeProxy request proxy-[0-9a-f]+ returned HTTP 200/, { timeout: 120_000 });
+  const proxyNotice = await page.locator(".global-message").textContent();
+  const proxyMarker = proxyNotice?.match(/proxy-[0-9a-f]{12}/)?.[0];
+  if (!proxyMarker) throw new Error(`No guest proxy evidence marker in: ${proxyNotice ?? "empty notice"}`);
 
   await page.getByRole("button", { name: "TARGET SERVER HOUSING", exact: true }).click();
   await page.getByRole("button", { name: "Refresh from guest", exact: true }).click();
-  await expect(page.locator(".logs-panel")).toContainText("proxy-acceptance", { timeout: 60_000 });
+  await expect(page.locator(".logs-panel")).toContainText(proxyMarker, { timeout: 60_000 });
 
   await page.getByRole("button", { name: "EVIDENCE & REPORT", exact: true }).click();
   await page.getByRole("button", { name: "Sync RangeProxy evidence", exact: true }).click();
   await expect(page.locator(".global-message")).toContainText(/Imported [1-9][0-9]* new guest proxy record/, { timeout: 60_000 });
   await expect(page.locator(".evidence-list")).toContainText("RangeProxy");
-  await expect(page.locator(".evidence-list")).toContainText("proxy-acceptance");
+  await expect(page.locator(".evidence-list")).toContainText(proxyMarker);
 
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export report", exact: true }).click();
   const download = await downloadPromise;
   const report = await readFile((await download.path())!, "utf8");
   expect(report).toContain("Incomplete / genuine RCE not verified");
-  expect(report).toContain("proxy-acceptance");
+  expect(report).toContain(proxyMarker);
   expect(report).not.toContain("Genuine RCE completion validated");
   expect(pageErrors).toEqual([]);
 });

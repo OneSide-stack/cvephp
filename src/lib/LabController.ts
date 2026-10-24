@@ -744,6 +744,53 @@ export class LabController {
     }
   };
 
+  runProxyBaseline = async (): Promise<void> => {
+    if (this.state.operation || !this.runtime.attacker || !["ready", "testing", "completed"].includes(this.state.status)) return;
+    const generation = this.generation;
+    let restoreIntercept = false;
+    const restoreInterceptMode = async () => {
+      if (!restoreIntercept || generation !== this.generation || !this.runtime.attacker) return;
+      try {
+        await this.command("attacker", "curl --noproxy '*' --max-time 5 -sS -X POST -d '' http://127.0.0.1:8081/toggle >/dev/null", 10_000);
+        restoreIntercept = false;
+      } catch (error) {
+        this.log(`Could not restore the prior RangeProxy intercept setting: ${error instanceof Error ? error.message : String(error)}`, "warning");
+      }
+    };
+    this.patch({ operation: "Reading RangeProxy state", status: "testing", error: null });
+    try {
+      const stateResult = await this.command("attacker", "labctl proxy-state", 10_000);
+      const proxyState = jsonFromOutput<{ intercept: boolean }>(stateResult.output);
+      restoreIntercept = proxyState.intercept === true;
+      if (restoreIntercept) {
+        this.patch({ operation: "Temporarily disabling RangeProxy intercept" });
+        await this.command("attacker", "curl --noproxy '*' --max-time 5 -sS -X POST -d '' http://127.0.0.1:8081/toggle >/dev/null", 10_000);
+      }
+      const id = `proxy-${randomToken(6)}`;
+      this.patch({ operation: "Sending guest curl through RangeProxy" });
+      const result = await this.command("attacker", `curl -x http://127.0.0.1:8080 --max-time 20 -fsS -i 'http://192.168.10.55/health.php?evidence=${id}'`, 30_000);
+      if (generation !== this.generation) return;
+      if (!/HTTP\/1\.[01] 200/.test(result.output)) throw new Error(`RangeProxy did not return HTTP 200: ${result.output}`);
+      this.evidence("attacker", "http", "RangeProxy baseline response", `attacker: curl -x http://127.0.0.1:8080 http://192.168.10.55/health.php?evidence=${id}`, result.output);
+      const logs = await this.command("target", "labctl logs access");
+      if (generation !== this.generation) return;
+      this.patch({ logs: { ...this.state.logs, access: logs.output } });
+      if (!logs.output.includes(id)) throw new Error("RangeProxy response was not corroborated by Apache's access log");
+      await restoreInterceptMode();
+      this.log("RangeProxy baseline returned a real response and matching target log evidence.", "success");
+      this.patch({
+        status: this.state.completedAs ? "completed" : this.state.session?.proof ? "testing" : "ready",
+        notice: `RangeProxy request ${id} returned HTTP 200 and was corroborated by the target access log.`,
+      });
+      await this.persistReport();
+    } catch (error) {
+      if (generation === this.generation) this.patch({ status: this.state.completedAs ? "completed" : "ready", error: error instanceof Error ? error.message : String(error) });
+    } finally {
+      await restoreInterceptMode();
+      if (generation === this.generation) this.patch({ operation: null });
+    }
+  };
+
   syncGuestEvidence = async (): Promise<void> => {
     if (this.state.operation || !this.runtime.attacker || !["ready", "testing", "completed"].includes(this.state.status)) return;
     const generation = this.generation;
