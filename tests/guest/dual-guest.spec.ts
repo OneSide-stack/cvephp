@@ -43,7 +43,7 @@ test("real dual guests provide network, HTTP, telemetry, and proxy evidence", as
   await page.getByRole("button", { name: "TARGET SERVER HOUSING", exact: true }).click();
   // Alpine has no X requirement; depending on the kernel's VGA mode, v86 may
   // expose its real console through the canvas or the text-screen element.
-  const targetVgaOutput = page.locator("#vm-target canvas").or(page.locator("#vm-target .v86-screen > div").first());
+  const targetVgaOutput = page.locator("#vm-target canvas:visible, #vm-target .v86-screen > div:visible").first();
   await expect(targetVgaOutput).toBeVisible();
   await expect(page.locator(".target-identity")).toContainText("8.2.34");
   await expect(page.locator(".target-identity")).toContainText("Apache");
@@ -58,9 +58,15 @@ test("real dual guests provide network, HTTP, telemetry, and proxy evidence", as
   await page.locator("#vm-attacker").getByRole("button", { name: "Serial", exact: true }).click();
   await expect(page.locator("#vm-attacker .serial-terminal")).toBeVisible();
   await page.locator("#vm-attacker .serial-terminal").click();
-  await page.keyboard.type("curl --noproxy '*' -sS -X POST -d '' http://127.0.0.1:8081/toggle >/dev/null; curl -x http://127.0.0.1:8080 --max-time 20 -sS 'http://192.168.10.55/health.php?evidence=proxy-acceptance' >/tmp/proxy-acceptance.json; echo PROXY_ACCEPTANCE_DONE");
+  await page.keyboard.type("curl --noproxy '*' --max-time 5 -sS -X POST -d '' http://127.0.0.1:8081/toggle >/dev/null; curl -x http://127.0.0.1:8080 --max-time 20 -fsS 'http://192.168.10.55/health.php?evidence=proxy-acceptance' >/tmp/proxy-acceptance.json; echo PROXY_ACCEPTANCE_DONE");
   await page.keyboard.press("Enter");
-  await page.waitForTimeout(8_000);
+  // Both guest commands are bounded above (5 + 20 seconds). Allow them to
+  // finish before asking either guest for evidence instead of racing the proxy.
+  await page.waitForTimeout(27_000);
+
+  await page.getByRole("button", { name: "TARGET SERVER HOUSING", exact: true }).click();
+  await page.getByRole("button", { name: "Refresh from guest", exact: true }).click();
+  await expect(page.locator(".logs-panel")).toContainText("proxy-acceptance", { timeout: 60_000 });
 
   await page.getByRole("button", { name: "EVIDENCE & REPORT", exact: true }).click();
   await page.getByRole("button", { name: "Sync RangeProxy evidence", exact: true }).click();
