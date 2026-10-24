@@ -726,13 +726,13 @@ export class LabController {
     this.patch({ operation: "Sending baseline request", status: "testing", error: null });
     try {
       const id = `learner-${randomToken(6)}`;
-      const result = await this.command("attacker", `curl --noproxy '*' --max-time 20 -sS -i 'http://192.168.10.55/health.php?evidence=${id}'`, 30_000);
+      const result = await this.command("attacker", `curl --noproxy '*' --max-time 20 -sS -i 'http://192.168.10.55/?evidence=${id}'`, 30_000);
       if (generation !== this.generation) return;
       if (!/HTTP\/1\.[01] 200/.test(result.output)) throw new Error(`Baseline did not return HTTP 200: ${result.output}`);
-      this.evidence("attacker", "http", "Learner baseline request", `attacker: curl -i http://192.168.10.55/health.php?evidence=${id}`, result.output);
+      this.evidence("attacker", "http", "Learner baseline request", `attacker: curl -i http://192.168.10.55/?evidence=${id}`, result.output);
       const logs = await this.command("target", "labctl logs access");
       if (generation !== this.generation) return;
-      this.patch({ logs: { ...this.state.logs, access: logs.output }, notice: "Baseline response captured from the target and corroborated by its guest access log." });
+      this.patch({ logs: { ...this.state.logs, access: logs.output }, notice: `Baseline ${id} captured from the target and corroborated by its guest access log.` });
       if (!logs.output.includes(id)) throw new Error("Baseline request was not corroborated by Apache's access log");
       this.log("Learner baseline completed with real response and target log evidence.", "success");
       this.patch({ status: this.state.completedAs ? "completed" : this.state.session?.proof ? "testing" : "ready" });
