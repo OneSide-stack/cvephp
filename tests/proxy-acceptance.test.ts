@@ -7,6 +7,8 @@ describe("real proxy acceptance helpers", () => {
   it("reads the actual escaped management textarea without changing HTTP CRLF", () => {
     const html = `<form><textarea name=raw rows=24>GET /?x=1&amp;y=2 HTTP/1.1\r\nHost: 192.168.10.55\r\nX-Test: &lt;value&gt;\r\n\r\n</textarea></form>`;
     expect(decodeManagementTextarea(html, 24)).toBe("GET /?x=1&y=2 HTTP/1.1\r\nHost: 192.168.10.55\r\nX-Test: <value>\r\n\r\n");
+    const serialNormalized = `<textarea name=raw rows=24>GET /serial HTTP/1.1\nHost: 192.168.10.55\n\n</textarea>`;
+    expect(decodeManagementTextarea(serialNormalized, 24)).toBe("GET /serial HTTP/1.1\r\nHost: 192.168.10.55\r\n\r\n");
     expect(() => decodeManagementTextarea("no request", 24)).toThrow("textarea");
   });
 

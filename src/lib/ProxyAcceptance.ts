@@ -47,11 +47,15 @@ export interface ProxyAcceptanceHost {
 export function decodeManagementTextarea(html: string, rows: number): string {
   const match = html.match(new RegExp(`<textarea name=raw rows=${rows}>([\\s\\S]*?)<\\/textarea>`));
   if (!match) throw new Error(`RangeProxy management did not expose its raw request textarea (rows=${rows})`);
-  return (match[1] ?? "")
+  const decoded = (match[1] ?? "")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&amp;/g, "&");
+  // Serial terminals may normalize guest CRLF to LF. The management textarea
+  // represents an HTTP wire request, so restore canonical CRLF before sending
+  // it back; otherwise RangeProxy correctly rejects the edited framing.
+  return decoded.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n/g, "\r\n");
 }
 
 export function parseProxyEvidence(output: string): ProxyEvidenceItem[] {
