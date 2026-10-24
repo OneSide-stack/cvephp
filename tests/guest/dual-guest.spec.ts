@@ -27,10 +27,8 @@ test("real dual guests provide network, HTTP, telemetry, and proxy evidence", as
   await expect(page.locator("#vm-attacker .vm-statusbar .status-pill")).toHaveText("Ready");
   await expect(page.locator("#vm-target .vm-statusbar .status-pill")).toHaveText("Ready");
   await page.locator("#vm-attacker").getByRole("button", { name: "Display", exact: true }).click();
-  // The attacker must enter real graphical VGA mode. Alpine deliberately uses
-  // a text console, so its visible v86 text screen—not a canvas—is the signal.
+  // The attacker must enter real graphical VGA mode.
   await expect(page.locator("#vm-attacker canvas")).toBeVisible();
-  await expect(page.locator("#vm-target .v86-screen > div").first()).toBeVisible();
   await expect(page.locator(".tool-tags")).toContainText("curl");
   await expect(page.locator(".tool-tags")).toContainText("dillo-beta");
 
@@ -43,6 +41,9 @@ test("real dual guests provide network, HTTP, telemetry, and proxy evidence", as
   await expect(page.locator(".global-message")).toContainText("Baseline response captured from the target", { timeout: 60_000 });
 
   await page.getByRole("button", { name: "TARGET SERVER HOUSING", exact: true }).click();
+  // Alpine deliberately uses a text console; its visible v86 text screen—not
+  // a canvas—is the appropriate display signal. The view must be active.
+  await expect(page.locator("#vm-target .v86-screen > div").first()).toBeVisible();
   await expect(page.locator(".target-identity")).toContainText("8.2.34");
   await expect(page.locator(".target-identity")).toContainText("Apache");
   await expect(page.locator(".telemetry-grid")) .toContainText("128.0 MiB");
