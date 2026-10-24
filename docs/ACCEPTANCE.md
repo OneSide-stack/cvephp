@@ -8,7 +8,7 @@ This file is deliberately conservative. “Implemented” means code/configurati
 | v86 integration | Implemented with pinned `v86@0.5.472`, local firmware/WASM, real VGA/serial containers | Runtime dual boot **unverified** in this workspace; no guest ISO was available locally |
 | Attacker workstation | TinyCore 11.0 ISO remaster, X11, guest tool inventory, Dillo/terminal launchers | Image build and graphical boot **unverified** until CI artifact and v86 boot pass |
 | Target housing | Alpine rootfs/initramfs, Apache prefork/mod_php, PHP 8.2.34 and optional 8.2.35 builds | Image build and Apache/PHP boot **unverified** until CI artifact and v86 boot pass |
-| Raw isolated networking | `inbrowser`, random numeric ID, exclusive Web Lock, no default route/relay/NAT | Static implementation reviewed; real ICMP/ARP/HTTP and cross-session isolation **unverified** |
+| Raw isolated networking | `inbrowser` ID 0, origin-wide exclusive Web Lock, concurrent labs refused, no default route/relay/NAT | Static implementation reviewed; real ICMP/ARP/HTTP and cross-session isolation **unverified** |
 | Readiness gate | Eight checks: two addresses, ICMP, listener, HTTP, headers, target access log, isolation | No ready claim without all checks; actual guest execution **unverified** |
 | Real browser/proxy traffic | Guest Dillo and Python RangeProxy, raw request editor/repeater, target-only destination | Python parser/framing tests executed; real guest-to-guest browser/proxy traffic **unverified** |
 | Target logs and telemetry | Guest `labctl`, Apache/PHP log tails, `/proc` RSS/memory, PHP health/build identity | Shell syntax checked; live values and refresh behavior **unverified** |

@@ -79,7 +79,7 @@ See [docs/IMAGES.md](docs/IMAGES.md) for source pins, build details, and trouble
 
 ## Network and isolation contract
 
-Both v86 instances use `net_device: { relay_url: "inbrowser", type: "ne2k" }`. The controller allocates a random numeric network ID per start/restore and holds an exclusive same-origin Web Lock named `enterprise-cyber-range-network-<id>`. v86 therefore uses a session-specific raw-Ethernet BroadcastChannel.
+Both v86 instances use `net_device: { relay_url: "inbrowser", type: "ne2k", id: 0 }`. In this v86 build the ID selects both the raw-Ethernet BroadcastChannel and the internal NE2000 bus topic, so it must be zero for guest frames to reach the adapter. The controller holds the origin-wide exclusive Web Lock `enterprise-cyber-range-network-0` for the entire session; a second concurrent lab is refused before any guest starts, preventing cross-session frames. Different browser origins cannot share this BroadcastChannel.
 
 - No NAT, host LAN bridge, Internet gateway, public relay, `wsproxy`, Wisp, or fetch relay is configured.
 - Both guest boot scripts remove default routes and configure only the `192.168.10.0/24` segment.
@@ -124,7 +124,7 @@ The guide shows commands to run only through a genuinely established execution c
 
 ## Snapshots and resets
 
-**Save state** calls v86 `save_state()` for both running guests and stores the paired buffers, session metadata (including the flag digest, never its plaintext), and resource mode in IndexedDB. Quota/transaction failures are shown and no partial pair is called saved. Restores use fresh network IDs, MAC translation, and real readiness/network checks. Saving is limited to verified, sealed running sessions.
+**Save state** calls v86 `save_state()` for both running guests and stores the paired buffers, session metadata (including the flag digest, never its plaintext), and resource mode in IndexedDB. Quota/transaction failures are shown and no partial pair is called saved. Restores reacquire the exclusive channel lock, use MAC translation, and repeat real readiness/network checks. Saving is limited to verified, sealed running sessions.
 
 Reboot uses v86 hardware restart, reprovisions the target, removes old target proof, and repeats verification. Stop/reset controls live outside the guest canvas and remain available during guest timeouts. Destructive actions with unsaved progress require confirmation. Evidence export is separate from VM state snapshots.
 

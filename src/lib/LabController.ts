@@ -43,6 +43,11 @@ interface MachineRuntime {
 // Package loading in the graphical TinyCore guest can exceed four minutes on
 // a software-emulated CPU. Readiness still requires the real shell and checks.
 const BOOT_TIMEOUT = 360_000;
+// v86 uses net_device.id for both its BroadcastChannel and its internal bus
+// topic. Its NE2000 device is net0, so only id=0 connects the two. Serialize
+// access to that origin-scoped channel: concurrent labs must fail closed.
+const INBROWSER_NETWORK_ID = "0";
+const INBROWSER_LOCK = "enterprise-cyber-range-network-0";
 
 function freshState(): LabState {
   return {
@@ -61,12 +66,6 @@ function freshState(): LabState {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function numericNetworkId(): string {
-  const value = new Uint32Array(1);
-  crypto.getRandomValues(value);
-  return String(value[0]);
 }
 
 export class LabController {
@@ -225,31 +224,28 @@ export class LabController {
     if (!navigator.locks) {
       throw new Error("Web Locks are unavailable, so exclusive ownership of the BroadcastChannel network cannot be guaranteed. Boot was refused (fail closed). Use a current Chrome, Edge, or Firefox browser.");
     }
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      const id = numericNetworkId();
-      let signal!: (available: boolean) => void;
-      const signalled = new Promise<boolean>((resolve) => { signal = resolve; });
-      let release!: () => void;
-      const held = new Promise<void>((resolve) => { release = resolve; });
-      const request = navigator.locks.request(`enterprise-cyber-range-network-${id}`, { ifAvailable: true }, async (lock) => {
-        if (!lock) {
-          signal(false);
-          return;
-        }
-        signal(true);
-        await held;
-      });
-      const available = await signalled;
-      if (available) {
-        this.networkLockRelease = () => {
-          release();
-          void request.catch(() => undefined);
-        };
-        return id;
+    let signal!: (available: boolean) => void;
+    const signalled = new Promise<boolean>((resolve) => { signal = resolve; });
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const request = navigator.locks.request(INBROWSER_LOCK, { ifAvailable: true }, async (lock) => {
+      if (!lock) {
+        signal(false);
+        return;
       }
+      signal(true);
+      await held;
+    });
+    const available = await signalled;
+    if (!available) {
       await request;
+      throw new Error("Another lab in this browser origin already owns v86-inbrowser-0. Concurrent boot was refused to prevent cross-session Ethernet traffic.");
     }
-    throw new Error("Could not allocate a unique virtual network identifier. No guest frames were sent.");
+    this.networkLockRelease = () => {
+      release();
+      void request.catch(() => undefined);
+    };
+    return INBROWSER_NETWORK_ID;
   }
 
   private releaseNetworkLock(): void {
@@ -349,7 +345,7 @@ export class LabController {
     }
     session.networkId = await this.acquireNetworkLock();
     this.patch({ session });
-    this.log(`Allocated isolated inbrowser network ${session.networkId}; no relay, NAT, or external backend is configured.`, "success");
+    this.log(`Acquired the origin-wide lock for v86-inbrowser-${session.networkId}; concurrent labs are refused, and no relay, NAT, or external backend is configured.`, "success");
 
     const restoreAttacker = snapshot?.attacker;
     const restoreTarget = snapshot?.target;
@@ -590,7 +586,7 @@ export class LabController {
       const targetRoutes = await this.command("target", "ip route");
       const combined = `${attackerRoutes.output}\n${targetRoutes.output}`;
       if (/^default\s/m.test(combined)) throw new Error(`A guest default route is present: ${combined}`);
-      return `v86-inbrowser-${session.networkId}; exclusive Web Lock held; no default guest route`;
+      return `v86-inbrowser-${session.networkId}; origin-wide exclusive Web Lock held; no default guest route`;
     });
   }
 
