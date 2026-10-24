@@ -505,7 +505,8 @@ export class ProxyAcceptanceRunner {
     this.report.markers.proxyDown = downMarker;
     this.report.markers.recovery = recoveryMarker;
     await this.setIntercept(false);
-    await this.command("attacker", "pids=$(ps | awk '/[r]ange_proxy[.]py/ {print $1}'); [ -n \"$pids\" ] || exit 1; kill $pids; n=0; while [ \"$n\" -lt 20 ]; do if ! curl --noproxy '*' -fsS --max-time 1 http://127.0.0.1:8081/api/state >/dev/null 2>&1; then exit 0; fi; n=$((n+1)); sleep 1; done; exit 1", 30_000);
+    const stopped = await this.command("attacker", "pids=''; for pid in $(pidof python3 python3.6 2>/dev/null); do [ -r \"/proc/$pid/cmdline\" ] || continue; cmd=$(tr '\\000' ' ' <\"/proc/$pid/cmdline\"); case \"$cmd\" in *'/home/tc/lab/range_proxy.py'*) pids=\"$pids $pid\"; printf 'PROXY_PID=%s CMD=%s\\n' \"$pid\" \"$cmd\";; esac; done; [ -n \"$pids\" ] || exit 1; kill $pids; n=0; while [ \"$n\" -lt 20 ]; do if ! curl --noproxy '*' -fsS --max-time 1 http://127.0.0.1:8081/api/state >/dev/null 2>&1; then printf '%s\\n' 'PROXY_LISTENER_STOPPED=1'; exit 0; fi; n=$((n+1)); sleep 1; done; exit 1", 30_000);
+    this.capture("proxy-stop.txt", "attacker", stopped.output);
     const unavailable = await this.command("attacker", `out=$(curl -x http://127.0.0.1:8080 --max-time 5 -sS -i '${TARGET_URL}?evidence=${downMarker}' 2>&1); rc=$?; printf '%s\\nPROXY_CLIENT_RC=%s\\n' \"$out\" \"$rc\"; [ \"$rc\" -ne 0 ]`, 15_000);
     this.capture("proxy-unavailable.txt", "attacker", unavailable.output);
     let logs = await this.targetLogs();
