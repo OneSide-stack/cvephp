@@ -233,7 +233,10 @@ export class ProxyAcceptanceRunner {
 
   private async writeRaw(raw: string, path = "/tmp/proxy-acceptance-request.raw"): Promise<void> {
     const encoded = btoa(raw);
-    await this.command("attacker", `printf '%s' '${encoded}' | base64 -d > '${path}'`, 10_000);
+    // TinyCore's BusyBox profile does not include a base64 applet. Python is
+    // already required and inventoried for RangeProxy, so use its standard
+    // library rather than adding a package or rebuilding the verified image.
+    await this.command("attacker", `PY=$(command -v python3 || command -v python3.6) || exit 1; printf '%s' '${encoded}' | "$PY" -c 'import base64,sys; open("${path}","wb").write(base64.b64decode(sys.stdin.read()))'`, 15_000);
   }
 
   private async postRaw(action: "/forward" | "/repeater", raw: string, id?: string, curlTimeout = 20, commandTimeout = 30_000): Promise<string> {
@@ -308,6 +311,7 @@ export class ProxyAcceptanceRunner {
       const state = await this.state();
       this.initialIntercept = state.intercept;
       if (state.target !== "http://192.168.10.55:80") throw new Error(`Unexpected proxy target: ${state.target}`);
+      if (state.pending.length !== 0) throw new Error("Finish or drop pre-existing held requests before running proxy acceptance");
       if (!result.output.includes("http_proxy=http://127.0.0.1:8080/")) throw new Error("Dillo proxy configuration is absent");
       return "The actual attacker reported Dillo, a running proxy, loopback proxy/management listeners, and target-only proxy configuration.";
     })();
@@ -551,9 +555,9 @@ export class ProxyAcceptanceRunner {
     try {
       await this.ensureProxyRunning();
       const state = await this.state();
-      for (const pending of state.pending) {
-        if (this.heldIds.has(pending.id)) await this.dropHeld(pending.id);
-      }
+      // The readiness gate rejects pre-existing learner holds, so every hold
+      // left here belongs to this run (including an auxiliary favicon).
+      for (const pending of state.pending) await this.dropHeld(pending.id);
       if (this.initialIntercept !== null) await this.setIntercept(this.initialIntercept);
     } catch (error) {
       problems.push(error instanceof Error ? error.message : String(error));

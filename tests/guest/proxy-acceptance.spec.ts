@@ -74,6 +74,7 @@ test("real Dillo interception, editing, Repeater, target logs, and recovery", as
     await expect(page.locator("#proxy-acceptance-status")).toHaveText(/^(PASS|FAIL)$/, { timeout: 8 * 60 * 1000 });
     report = await readReport();
     expect(report, "The controller must return its real proxy gate report").not.toBeNull();
+    for (const gate of report!.gates) console.log(`PROXY ACCEPTANCE ${gate.status} ${gate.id}: ${gate.detail}`);
     for (const [name, data] of Object.entries(report!.artifacts)) {
       await testInfo.attach(name, {
         body: data,
