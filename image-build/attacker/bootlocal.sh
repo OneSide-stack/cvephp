@@ -28,4 +28,8 @@ while [ "$n" -lt 30 ]; do
   if wget -q -O /tmp/range-proxy-ready.json http://127.0.0.1:8081/api/state 2>/dev/null; then break; fi
   n=$((n+1)); sleep 1
 done
-printf 'CYBER_RANGE_ATTACKER_READY address=192.168.10.10 proxy=%s\n' "$(test -s /tmp/range-proxy-ready.json && echo running || echo failed)"
+
+# This only records boot-script completion. The controller separately requires
+# labctl's address, proxy, X process, and X socket checks before reporting Ready.
+printf 'CYBER_RANGE_ATTACKER_BOOT address=192.168.10.10 proxy=%s\n' \
+  "$(test -s /tmp/range-proxy-ready.json && echo running || echo failed)"

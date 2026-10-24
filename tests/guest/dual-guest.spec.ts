@@ -26,8 +26,11 @@ test("real dual guests provide network, HTTP, telemetry, and proxy evidence", as
   await expect(labStatus).toHaveText("Ready");
   await expect(page.locator("#vm-attacker .vm-statusbar .status-pill")).toHaveText("Ready");
   await expect(page.locator("#vm-target .vm-statusbar .status-pill")).toHaveText("Ready");
+  await page.locator("#vm-attacker").getByRole("button", { name: "Display", exact: true }).click();
+  // The attacker must enter real graphical VGA mode. Alpine deliberately uses
+  // a text console, so its visible v86 text screen—not a canvas—is the signal.
   await expect(page.locator("#vm-attacker canvas")).toBeVisible();
-  await expect(page.locator("#vm-target canvas")).toBeVisible();
+  await expect(page.locator("#vm-target .v86-screen > div").first()).toBeVisible();
   await expect(page.locator(".tool-tags")).toContainText("curl");
   await expect(page.locator(".tool-tags")).toContainText("dillo-beta");
 

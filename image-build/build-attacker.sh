@@ -59,12 +59,20 @@ install -m 0755 "$ROOT/image-build/attacker/exploit.py" "$CORE/home/tc/exploit.p
 install -m 0644 "$ROOT/image-build/attacker/notes.txt" "$CORE/home/tc/notes.txt"
 install -m 0644 "$ROOT/image-build/attacker/dillorc" "$CORE/home/tc/.dillo/dillorc"
 install -m 0755 "$ROOT/image-build/attacker/x-range.sh" "$CORE/home/tc/.X.d/50-range"
-cat >>"$CORE/home/tc/.profile" <<'EOF'
+# A pre-created home profile prevents Tiny Core's setupHome from copying its
+# stock profile. Preserve the stock desktop startup explicitly, with proxy
+# variables first, and restrict startx to tty1 so ttyS0 cannot race the GUI.
+cat >"$CORE/home/tc/.profile" <<'EOF'
 export http_proxy=http://127.0.0.1:8080/
 export HTTP_PROXY=http://127.0.0.1:8080/
 export no_proxy=
 export NO_PROXY=
 EOF
+cat "$CORE/etc/skel/.profile" >>"$CORE/home/tc/.profile"
+sed -i 's|\[ ${TERMTYPE:5:3} == "tty" \]|[ "$TERMTYPE" = "/dev/tty1" ]|' "$CORE/home/tc/.profile"
+grep -F '[ "$TERMTYPE" = "/dev/tty1" ]' "$CORE/home/tc/.profile" >/dev/null
+sed -i 's|^startx$|startx >/tmp/cyber-range-x.log 2>\&1|' "$CORE/home/tc/.profile"
+grep -F 'startx >/tmp/cyber-range-x.log 2>&1' "$CORE/home/tc/.profile" >/dev/null
 # Serial is a real guest shell, used for network checks and optional console UI.
 sed -i '/ttyS0/d' "$CORE/etc/inittab"
 echo 'ttyS0::respawn:/sbin/getty -n -l /usr/local/bin/lab-console 115200 ttyS0 vt100' >>"$CORE/etc/inittab"

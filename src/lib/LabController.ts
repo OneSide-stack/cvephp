@@ -497,7 +497,7 @@ export class LabController {
     }
     let detail = last instanceof Error ? last.message : String(last);
     const diagnosticCommand = machine === "attacker"
-      ? "printf '%s\\n' '--- proxy processes ---'; ps; netstat -ltn 2>&1 || ss -ltn 2>&1; for p in $(pidof python3); do grep -E '^(Name|State|VmRSS)' /proc/$p/status 2>&1; done; printf '%s\\n' '--- proxy log ---'; cat /tmp/range-proxy.log 2>&1; printf '%s\\n' '--- proxy files ---'; ls -ld /home/tc/lab /home/tc/lab-evidence /tmp/range-proxy.log 2>&1"
+      ? "printf '%s\\n' '--- proxy processes ---'; ps; netstat -ltn 2>&1 || ss -ltn 2>&1; for p in $(pidof python3); do grep -E '^(Name|State|VmRSS)' /proc/$p/status 2>&1; done; printf '%s\\n' '--- proxy log ---'; cat /tmp/range-proxy.log 2>&1; printf '%s\\n' '--- proxy files ---'; ls -ld /home/tc/lab /home/tc/lab-evidence /tmp/range-proxy.log 2>&1; printf '%s\\n' '--- graphical display ---'; ls -l /tmp/.X11-unix /tmp/cyber-range-x.log 2>&1; cat /tmp/cyber-range-x.log 2>&1; tail -n 60 /home/tc/.xsession-errors 2>&1"
       : "printf '%s\\n' '--- OpenRC services ---'; rc-status --all 2>&1; rc-service apache2 status 2>&1; id; ls -ld /run/cyber-range 2>&1; ls -l /run/cyber-range 2>&1; printf '%s\\n' '--- Apache configuration ---'; httpd -t 2>&1; ls -ld /run/apache2 /var/log/apache2 2>&1; printf '%s\\n' '--- Apache error log ---'; tail -n 80 /var/log/apache2/error.log 2>&1; printf '%s\\n' '--- kernel/system log ---'; tail -n 60 /var/log/messages 2>&1";
     try {
       const diagnostics = await runtime.serial.exec(diagnosticCommand, 15_000);

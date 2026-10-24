@@ -166,6 +166,7 @@ p { color: var(--muted); line-height: 1.65; }
 .vm-stage { position: relative; width: 100%; aspect-ratio: 4 / 3; min-height: 380px; max-height: 760px; background: #020405; overflow: hidden; border: 2px solid transparent; }
 .vm-stage.focused { border-color: #1f4b45; }
 .v86-screen, .serial-screen { width: 100%; height: 100%; background: #020405; overflow: hidden; }
+.v86-screen[hidden], .serial-screen[hidden] { display: none; }
 .v86-screen { display: flex; align-items: center; justify-content: center; }
 .v86-screen > div { width: 100%; height: 100%; padding: 10px; overflow: hidden; color: #d5dfdc; background: #050708; box-sizing: border-box; }
 .v86-screen canvas { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
