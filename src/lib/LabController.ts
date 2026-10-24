@@ -468,9 +468,10 @@ export class LabController {
     if (!runtime) throw new Error(`${machine} is not running`);
     let last: unknown;
     // A refused management connection returns immediately. Keep polling the
-    // real socket long enough for Tiny Core's asynchronous package/service
-    // startup instead of exhausting all retries in only a few seconds.
-    for (let attempt = 0; attempt < 20; attempt += 1) {
+    // real socket for up to two minutes in that case, while retaining the
+    // original twenty-attempt ceiling for slower command/timeout failures.
+    const readinessStarted = Date.now();
+    for (let attempt = 0; attempt < 80; attempt += 1) {
       try {
         const result = await runtime.serial.exec("labctl ready", 25_000);
         const info = jsonFromOutput<Record<string, string>>(result.output);
@@ -490,12 +491,13 @@ export class LabController {
         return;
       } catch (error) {
         last = error;
+        if (attempt >= 19 && Date.now() - readinessStarted >= 120_000) break;
         await sleep(1_500);
       }
     }
     let detail = last instanceof Error ? last.message : String(last);
     const diagnosticCommand = machine === "attacker"
-      ? "printf '%s\\n' '--- proxy processes ---'; ps; printf '%s\\n' '--- proxy log ---'; cat /tmp/range-proxy.log 2>&1; printf '%s\\n' '--- proxy files ---'; ls -ld /home/tc/lab /home/tc/lab-evidence /tmp/range-proxy.log 2>&1"
+      ? "printf '%s\\n' '--- proxy processes ---'; ps; netstat -ltn 2>&1 || ss -ltn 2>&1; for p in $(pidof python3); do grep -E '^(Name|State|VmRSS)' /proc/$p/status 2>&1; done; printf '%s\\n' '--- proxy log ---'; cat /tmp/range-proxy.log 2>&1; printf '%s\\n' '--- proxy files ---'; ls -ld /home/tc/lab /home/tc/lab-evidence /tmp/range-proxy.log 2>&1"
       : "printf '%s\\n' '--- OpenRC services ---'; rc-status --all 2>&1; rc-service apache2 status 2>&1; id; ls -ld /run/cyber-range 2>&1; ls -l /run/cyber-range 2>&1; printf '%s\\n' '--- Apache configuration ---'; httpd -t 2>&1; ls -ld /run/apache2 /var/log/apache2 2>&1; printf '%s\\n' '--- Apache error log ---'; tail -n 80 /var/log/apache2/error.log 2>&1; printf '%s\\n' '--- kernel/system log ---'; tail -n 60 /var/log/messages 2>&1";
     try {
       const diagnostics = await runtime.serial.exec(diagnosticCommand, 15_000);
