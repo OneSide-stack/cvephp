@@ -236,7 +236,7 @@ export class ProxyAcceptanceRunner {
   }
 
   private async launchBrowser(marker: string): Promise<void> {
-    await this.command("attacker", `BROWSER=$(command -v dillo-beta || command -v dillo) || exit 1; DISPLAY=:0 "$BROWSER" '${TARGET_URL}?evidence=${marker}' >>/tmp/proxy-acceptance-dillo.log 2>&1 &`, 10_000);
+    await this.command("attacker", `if BROWSER=$(command -v dillo-beta || command -v dillo); then DISPLAY=:0 "$BROWSER" '${TARGET_URL}?evidence=${marker}' >>/tmp/proxy-acceptance-dillo.log 2>&1 & else printf '%s\\n' 'DILLO_NOT_FOUND=1'; false; fi`, 10_000);
   }
 
   private async waitPending(marker: string, timeoutMs = 60_000): Promise<{ id: string; state: ProxyState }> {
@@ -304,7 +304,7 @@ export class ProxyAcceptanceRunner {
   }
 
   private async restartProxy(): Promise<void> {
-    await this.command("attacker", "PY=$(command -v python3 || command -v python3.6) || exit 1; nohup \"$PY\" -u /home/tc/lab/range_proxy.py >>/tmp/range-proxy.log 2>&1 &", 10_000);
+    await this.command("attacker", "if PY=$(command -v python3 || command -v python3.6); then nohup \"$PY\" -u /home/tc/lab/range_proxy.py >>/tmp/range-proxy.log 2>&1 & else printf '%s\\n' 'PYTHON_NOT_FOUND=1'; false; fi", 10_000);
     const deadline = Date.now() + 90_000;
     let last: unknown;
     while (Date.now() < deadline) {
@@ -505,7 +505,7 @@ export class ProxyAcceptanceRunner {
     this.report.markers.proxyDown = downMarker;
     this.report.markers.recovery = recoveryMarker;
     await this.setIntercept(false);
-    const stopped = await this.command("attacker", "pids=''; for pid in $(pidof python3 python3.6 2>/dev/null); do [ -r \"/proc/$pid/cmdline\" ] || continue; cmd=$(tr '\\000' ' ' <\"/proc/$pid/cmdline\"); case \"$cmd\" in *'/home/tc/lab/range_proxy.py'*) pids=\"$pids $pid\"; printf 'PROXY_PID=%s CMD=%s\\n' \"$pid\" \"$cmd\";; esac; done; [ -n \"$pids\" ] || exit 1; kill $pids; n=0; while [ \"$n\" -lt 20 ]; do if ! curl --noproxy '*' -fsS --max-time 1 http://127.0.0.1:8081/api/state >/dev/null 2>&1; then printf '%s\\n' 'PROXY_LISTENER_STOPPED=1'; exit 0; fi; n=$((n+1)); sleep 1; done; exit 1", 30_000);
+    const stopped = await this.command("attacker", "pids=''; for pid in $(pidof python3 python3.6 2>/dev/null); do [ -r \"/proc/$pid/cmdline\" ] || continue; cmd=$(tr '\\000' ' ' <\"/proc/$pid/cmdline\"); case \"$cmd\" in *'/home/tc/lab/range_proxy.py'*) pids=\"$pids $pid\"; printf 'PROXY_PID=%s CMD=%s\\n' \"$pid\" \"$cmd\";; esac; done; if [ -z \"$pids\" ]; then printf '%s\\n' 'PROXY_PID_NOT_FOUND=1'; false; else kill $pids; stopped=0; n=0; while [ \"$n\" -lt 20 ]; do if ! curl --noproxy '*' -fsS --max-time 1 http://127.0.0.1:8081/api/state >/dev/null 2>&1; then stopped=1; printf '%s\\n' 'PROXY_LISTENER_STOPPED=1'; break; fi; n=$((n+1)); sleep 1; done; [ \"$stopped\" -eq 1 ]; fi", 30_000);
     this.capture("proxy-stop.txt", "attacker", stopped.output);
     const unavailable = await this.command("attacker", `out=$(curl -x http://127.0.0.1:8080 --max-time 5 -sS -i '${TARGET_URL}?evidence=${downMarker}' 2>&1); rc=$?; printf '%s\\nPROXY_CLIENT_RC=%s\\n' \"$out\" \"$rc\"; [ \"$rc\" -ne 0 ]`, 15_000);
     this.capture("proxy-unavailable.txt", "attacker", unavailable.output);
