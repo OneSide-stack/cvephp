@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeManagementTextarea, editDefaultRepeaterRequest, evidenceRequest, parseProxyEvidence } from "../src/lib/ProxyAcceptance";
+import { decodeManagementTextarea, editDefaultRepeaterRequest, evidenceRequest, oneDistinctApacheLine, parseProxyEvidence } from "../src/lib/ProxyAcceptance";
 
 const DEFAULT_RAW = "GET /health.php HTTP/1.1\r\nHost: 192.168.10.55\r\nUser-Agent: RangeRepeater/1.0\r\nAccept: */*\r\nConnection: close\r\n\r\n";
 
@@ -17,6 +17,13 @@ describe("real proxy acceptance helpers", () => {
     expect(raw).toBe("POST /health.php?evidence=repeater-test-123 HTTP/1.1\r\nHost: 192.168.10.55\r\nUser-Agent: RangeRepeaterAcceptance/1.0\r\nX-Proxy-Acceptance: repeater-test-123\r\nContent-Length: 0\r\nAccept: */*\r\nConnection: close\r\n\r\n");
     expect(raw.replace(/\r\n/g, "")).not.toContain("\n");
     expect(() => editDefaultRepeaterRequest("GET /other HTTP/1.1\r\n\r\n", "x")).toThrow("method and URL");
+  });
+
+  it("deduplicates only identical Apache log occurrences, never distinct requests", () => {
+    const line = `192.168.10.10 - - [now] "GET /?evidence=apache-marker HTTP/1.1" 200 123 "-" "Dillo" pid=42`;
+    expect(oneDistinctApacheLine(`${line}\n${line}`, "apache-marker")).toEqual({ line, occurrences: 2 });
+    expect(() => oneDistinctApacheLine(`${line}\n${line.replace("pid=42", "pid=43")}`, "apache-marker")).toThrow("2 distinct lines");
+    expect(() => oneDistinctApacheLine("unrelated", "apache-marker")).toThrow("0 distinct lines");
   });
 
   it("accepts only complete guest JSONL records and decodes their real request bytes", () => {

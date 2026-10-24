@@ -84,8 +84,21 @@ export function editDefaultRepeaterRequest(defaultRaw: string, marker: string): 
   return raw;
 }
 
-function markerCount(output: string, marker: string): number {
-  return output.split(marker).length - 1;
+function evidenceMatches(output: string, kind: string, marker: string): ProxyEvidenceItem[] {
+  return parseProxyEvidence(output).filter((candidate) => candidate.kind === kind && evidenceRequest(candidate).includes(marker));
+}
+
+function apacheMatches(output: string, marker: string): string[] {
+  return output.split("\n").filter((line) => line.includes(marker));
+}
+
+export function oneDistinctApacheLine(output: string, marker: string): { line: string; occurrences: number } {
+  const matches = apacheMatches(output, marker);
+  const distinct = [...new Set(matches)];
+  if (distinct.length !== 1) {
+    throw new Error(`Expected one distinct Apache request for ${marker}; found ${distinct.length} distinct lines in ${matches.length} occurrences:\n${matches.join("\n")}`);
+  }
+  return { line: distinct[0]!, occurrences: matches.length };
 }
 
 function managementStatus(output: string): number {
@@ -383,10 +396,15 @@ export class ProxyAcceptanceRunner {
       const logs = await this.waitTargetMarker(edited);
       this.capture("browser-after-forward-access.log", "target", logs);
       if (logs.includes(original)) throw new Error("The original marker reached Apache even though only the edited request was forwarded");
-      if (markerCount(logs, edited) !== 1) throw new Error(`Expected exactly one edited Apache marker, found ${markerCount(logs, edited)}`);
-      const line = logs.split("\n").find((candidate) => candidate.includes(edited)) ?? "";
-      if (!line.includes("GET ") || !line.includes(`/?evidence=${edited} HTTP/`) || !line.includes(" 200 ")) throw new Error(`Edited Apache line does not match the intended GET and HTTP 200: ${line}`);
-      return `${edited}: Apache recorded exactly one edited GET with HTTP 200; ${original} remained absent.`;
+      const evidence = await this.waitEvidence(edited, "intercept-forwarded");
+      this.capture("browser-forward-proxy-evidence.jsonl", "attacker", evidence.output);
+      const forwards = evidenceMatches(evidence.output, "intercept-forwarded", edited);
+      const apache = oneDistinctApacheLine(logs, edited);
+      if (forwards.length !== 1) throw new Error(`Expected exactly one real proxy intercept-forwarded record for ${edited}, found ${forwards.length}`);
+      if (!apache.line.includes("GET ") || !apache.line.includes(`/?evidence=${edited} HTTP/`) || !apache.line.includes(" 200 ")) throw new Error(`Edited Apache line does not match the intended GET and HTTP 200: ${apache.line}`);
+      const loggingConfig = await this.command("target", "grep -R -n -E '^[[:space:]]*(ServerRoot|CustomLog)' /etc/apache2 2>/dev/null || true", 15_000);
+      this.capture("target-logging-configuration.txt", "target", loggingConfig.output);
+      return `${edited}: one real proxy intercept-forwarded record and one distinct Apache GET with HTTP 200 corroborated the edit (${apache.occurrences} identical log occurrence${apache.occurrences === 1 ? "" : "s"}); ${original} remained absent.`;
     })();
   }
 
@@ -410,10 +428,13 @@ export class ProxyAcceptanceRunner {
       this.capture("disabled-proxy-evidence.jsonl", "attacker", evidenceOutput);
       this.capture("disabled-target-access.log", "target", logs);
       if (!item) throw new Error("Interception-off browser traffic did not produce a forwarded proxy record; a direct-route fallback cannot be ruled out");
+      const forwarded = evidenceMatches(evidenceOutput, "forwarded", marker);
+      if (forwarded.length !== 1) throw new Error(`Interception-off marker had ${forwarded.length} real proxy forwarded records instead of one`);
       const raw = evidenceRequest(item);
       if (!/User-Agent:.*Dillo/i.test(raw)) throw new Error("The interception-off proxy record was not from Dillo");
-      if (markerCount(logs, marker) !== 1) throw new Error("Interception-off browser request did not reach Apache exactly once");
-      return `${marker}: with interception OFF, Dillo still produced a real RangeProxy forwarded record and one Apache entry, ruling out a silent direct-route fallback.`;
+      const apache = oneDistinctApacheLine(logs, marker);
+      if (!apache.line.includes(`GET /?evidence=${marker} HTTP/`) || !apache.line.includes(" 200 ")) throw new Error(`Interception-off Apache line does not match the Dillo GET: ${apache.line}`);
+      return `${marker}: with interception OFF, one Dillo RangeProxy forwarded record and one distinct Apache GET ruled out a direct-route fallback (${apache.occurrences} identical log occurrence${apache.occurrences === 1 ? "" : "s"}).`;
     })();
   }
 
@@ -531,8 +552,11 @@ export class ProxyAcceptanceRunner {
     const logs = await this.waitTargetMarker(markers[1]!);
     this.capture("repeated-target-access.log", "target", logs);
     for (const marker of markers) {
-      if (markerCount(logs, marker) !== 1) throw new Error(`Repeated request ${marker} did not appear exactly once in Apache`);
-      await this.waitEvidence(marker, "forwarded");
+      const apache = oneDistinctApacheLine(logs, marker);
+      if (!apache.line.includes(`GET /health.php?evidence=${marker} HTTP/`) || !apache.line.includes(" 200 ")) throw new Error(`Repeated-request Apache line does not match ${marker}: ${apache.line}`);
+      const evidence = await this.waitEvidence(marker, "forwarded");
+      this.capture("repeated-proxy-evidence.jsonl", "attacker", evidence.output);
+      if (evidenceMatches(evidence.output, "forwarded", marker).length !== 1) throw new Error(`Repeated request ${marker} did not have exactly one real proxy forwarded record`);
     }
   }
 
