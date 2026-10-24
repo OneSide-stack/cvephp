@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { Activity, BookOpen, Box, CheckCircle2, ChevronRight, CircleStop, FileText, Flag, HardDrive, History, MemoryStick, Monitor, Network, Play, RefreshCw, RotateCcw, Save, Server, ShieldCheck, Square, X } from "lucide-react";
+import { Activity, BookOpen, Box, CheckCircle2, ChevronRight, CircleStop, Flag, FlaskConical, HardDrive, History, MemoryStick, Monitor, Network, Play, RefreshCw, RotateCcw, Save, Server, ShieldCheck, Square, X } from "lucide-react";
 import { useLab } from "./lib/LabContext";
 import { STATUS_LABELS } from "./types";
 import { AttackerView } from "./views/AttackerView";
 import { TargetView } from "./views/TargetView";
 import { NetworkView } from "./views/NetworkView";
 import { GuideView } from "./views/GuideView";
-import { EvidenceView } from "./views/EvidenceView";
+import { LabView } from "./views/LabView";
 import { InlineMessage, StatusPill } from "./components/ui";
 import { formatBytes, formatTime } from "./lib/utils";
 
@@ -21,8 +21,8 @@ const navigation = [
   { id: "attacker" as const, label: "ATTACKER WORKSTATION", icon: Monitor },
   { id: "target" as const, label: "TARGET SERVER HOUSING", icon: Server },
   { id: "network" as const, label: "NETWORK TOPOLOGY", icon: Network },
+  { id: "lab" as const, label: "VULNERABILITY LAB", icon: FlaskConical },
   { id: "guide" as const, label: "LAB GUIDE", icon: BookOpen },
-  { id: "evidence" as const, label: "EVIDENCE & REPORT", icon: FileText },
 ];
 
 export default function App() {
@@ -59,7 +59,7 @@ export default function App() {
         </div>
       </div>
       <nav className="top-navigation" aria-label="Lab views">
-        {navigation.map(({ id, label, icon: Icon }) => <button key={id} className={state.view === id ? "active" : ""} onClick={() => controller.setView(id)} aria-current={state.view === id ? "page" : undefined}><Icon size={15} /><span>{label}</span>{id === "evidence" && state.evidence.length > 0 && <b>{state.evidence.length}</b>}</button>)}
+        {navigation.map(({ id, label, icon: Icon }) => <button key={id} className={state.view === id ? "active" : ""} onClick={() => controller.setView(id)} aria-current={state.view === id ? "page" : undefined}><Icon size={15} /><span>{label}</span>{id === "lab" && <b>{controller.exerciseSummary().steps.filter((step) => step.status === "passed").length}/8</b>}</button>)}
       </nav>
     </header>
 
@@ -90,7 +90,7 @@ export default function App() {
       <div hidden={state.view !== "target"}><TargetView /></div>
       <div hidden={state.view !== "network"}><NetworkView /></div>
       <div hidden={state.view !== "guide"}><GuideView /></div>
-      <div hidden={state.view !== "evidence"}><EvidenceView onRestore={restore} /></div>
+      <div hidden={state.view !== "lab"}><LabView /></div>
     </main>
 
     <footer className="app-footer">
@@ -102,7 +102,7 @@ export default function App() {
       <section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
         <button className="icon-button modal-close" onClick={() => setConfirmation(null)} disabled={confirmBusy} aria-label="Cancel"><X size={17} /></button>
         <span className="confirm-icon"><CircleStop size={25} /></span><span className="eyebrow">CONFIRM SESSION CHANGE</span><h2 id="confirm-title">{confirmation.title}</h2><p>{confirmation.description}</p>
-        <div className="confirm-note"><Flag size={15} /><span>Need to keep this work? Cancel and export the evidence report or save both VM states first.</span></div>
+        <div className="confirm-note"><Flag size={15} /><span>Need to keep this work? Cancel and save both VM states first. Exercise progress is re-derived from guest evidence after a restart.</span></div>
         <div className="modal-actions"><button className="button secondary" onClick={() => setConfirmation(null)} disabled={confirmBusy}>Cancel</button><button className="button danger" onClick={() => void executeConfirmation()} disabled={confirmBusy}>{confirmBusy ? "Working…" : confirmation.confirmLabel}<ChevronRight size={15} /></button></div>
       </section>
     </div>}

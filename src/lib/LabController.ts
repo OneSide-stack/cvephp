@@ -1,9 +1,13 @@
 import type { V86, V86Options } from "v86";
 import type {
   AssetManifest,
+  BuildObservation,
   EvidenceRecord,
+  ExerciseFacts,
+  ExerciseStepId,
   LabState,
   MachineId,
+  ProbeObservation,
   ResourceMode,
   SessionInfo,
   SnapshotMeta,
@@ -25,8 +29,25 @@ import {
   saveSnapshot,
   type SnapshotRecord,
 } from "./storage";
-import { clampText, jsonFromOutput, randomToken, sha256Text } from "./utils";
-import { ProxyAcceptanceRunner } from "./ProxyAcceptance";
+import { clampText, jsonFromOutput, parseKeyValues, randomToken, sha256Text } from "./utils";
+import { ProxyAcceptanceRunner, evidenceRequest, parseProxyEvidence } from "./ProxyAcceptance";
+import {
+  ADVISORY,
+  ADVISORY_GUIDANCE,
+  PATCHED_RELEASES,
+  PATCH_INI_MARKER,
+  PINNED_SOURCES,
+} from "./cve";
+import {
+  SIMULATION_QUESTIONS,
+  assessBuild,
+  validateReconFacts,
+  classifyProbeOutcome,
+  emptyExercise,
+  evaluateExercise,
+  validateGenuineCompletion,
+  validateSimulationAnswer,
+} from "./exercise";
 
 interface LoadedImages {
   attacker: ArrayBuffer;
@@ -50,6 +71,8 @@ const BOOT_TIMEOUT = 360_000;
 const INBROWSER_NETWORK_ID = "0";
 const INBROWSER_LOCK = "enterprise-cyber-range-network-0";
 
+const TARGET_PHP_RECON = `/usr/local/bin/php -r 'echo "version=",PHP_VERSION,"\\n","memory_limit=",ini_get("memory_limit"),"\\n","post_max_size=",ini_get("post_max_size"),"\\n","upload_max_filesize=",ini_get("upload_max_filesize"),"\\n","upload_progress=",(ini_get("session.upload_progress.enabled")?"1":"0"),"\\n","hard_limit=",(ini_get("memory_hard_limit_percent")===false?"absent":ini_get("memory_hard_limit_percent")),"\\n";'`;
+
 function freshState(): LabState {
   return {
     ...initialState,
@@ -62,6 +85,8 @@ function freshState(): LabState {
     evidence: [],
     activity: [...initialState.activity],
     snapshots: [],
+    exercise: emptyExercise(),
+    recovery: null,
   };
 }
 
@@ -149,9 +174,16 @@ export class LabController {
       // usable for reading the guide and previously recorded report data.
     }
     try {
-      const report = await loadProgress<{ session: SessionInfo; evidence: EvidenceRecord[]; checks: LabState["checks"]; completedAs: LabState["completedAs"] } | null>("last-report");
+      const report = await loadProgress<{ session: SessionInfo; evidence: EvidenceRecord[]; checks: LabState["checks"]; exercise?: ExerciseFacts; completedAs: LabState["completedAs"] } | null>("last-report");
       if (report && report.session && Array.isArray(report.evidence) && Array.isArray(report.checks)) {
-        this.patch({ session: report.session, evidence: report.evidence, checks: report.checks, completedAs: report.completedAs ?? null, hasUnsavedProgress: false });
+        this.patch({
+          session: report.session,
+          evidence: report.evidence,
+          checks: report.checks,
+          exercise: report.exercise ?? emptyExercise(),
+          completedAs: report.completedAs ?? null,
+          hasUnsavedProgress: false,
+        });
       }
     } catch {
       // A corrupt or unavailable historical report must not prevent asset
@@ -330,7 +362,7 @@ export class LabController {
     } else {
       // A persisted report has no live target provisioning context. A new cold
       // session must never inherit its evidence under a different identifier.
-      this.patch({ evidence: [], hasUnsavedProgress: false });
+      this.patch({ evidence: [], hasUnsavedProgress: false, exercise: emptyExercise(), completedAs: null });
       this.sessionProvisioned = false;
       session = {
         id: randomToken(8),
@@ -920,11 +952,621 @@ export class LabController {
     }
   };
 
+  private patchExercise(value: Partial<ExerciseFacts>): void {
+    this.patch({ exercise: { ...this.state.exercise, ...value } });
+  }
+
+  private setStepFailure(step: ExerciseStepId, message: string): void {
+    this.patchExercise({ failures: { ...this.state.exercise.failures, [step]: message } });
+  }
+
+  private clearStepFailure(step: ExerciseStepId): void {
+    const failures = { ...this.state.exercise.failures };
+    delete failures[step];
+    this.patchExercise({ failures });
+  }
+
+  private settleExerciseStatus(): void {
+    this.patch({
+      status: this.state.completedAs === "genuine-rce"
+        ? "completed"
+        : this.state.session?.proof || this.state.completedAs === "simulated-exercise"
+          ? "testing"
+          : "ready",
+    });
+  }
+
+  /**
+   * Step 1: read the target's own configuration. Every value comes from the
+   * guest (HTTP health endpoint, PHP CLI, /proc, stat) and is cross-checked
+   * before it becomes exercise evidence.
+   */
+  runRecon = async (): Promise<void> => {
+    if (this.state.operation || !this.runtime.attacker || !this.runtime.target || !["ready", "testing", "completed"].includes(this.state.status)) return;
+    const generation = this.generation;
+    this.clearStepFailure("reconnaissance");
+    this.patch({ operation: "Reading the target's real configuration", status: "testing", error: null });
+    const marker = `recon-${randomToken(6)}`;
+    try {
+      const healthResponse = await this.command("attacker", `curl --noproxy '*' --max-time 20 -sS -D /tmp/range-recon-headers -o /tmp/range-recon-body 'http://192.168.10.55/health.php?evidence=${marker}' && cat /tmp/range-recon-headers && cat /tmp/range-recon-body`, 45_000);
+      if (generation !== this.generation) return;
+      if (!/HTTP\/1\.[01] 200/.test(healthResponse.output)) throw new Error(`The target did not return HTTP 200 for /health.php: ${healthResponse.output.slice(-800)}`);
+      const health = jsonFromOutput<TargetHealth>(healthResponse.output);
+      if (!/apache2handler/i.test(health.php_sapi)) throw new Error(`The target reported PHP SAPI "${health.php_sapi}", not Apache mod_php. The exercise refuses to classify a different SAPI.`);
+      const flagStatus = await this.command("attacker", "curl --noproxy '*' --max-time 15 -sS -o /dev/null -w '%{http_code}' 'http://192.168.10.55/flag.txt'", 25_000);
+      if (generation !== this.generation) return;
+      const php = await this.command("target", TARGET_PHP_RECON, 25_000);
+      if (generation !== this.generation) return;
+      const telemetryResult = await this.command("target", "labctl telemetry", 25_000);
+      const build = await this.command("target", "labctl build", 25_000);
+      const listeners = await this.command("target", "ss -ltn; printf 'httpd_pids '; pidof httpd || true", 25_000);
+      const flagStat = await this.command("target", "stat -c '%U %G %a %s %n' /var/www/html/flag.txt; ls -l /usr/lib/apache2/libphp.so; sha256sum /usr/lib/apache2/libphp.so", 25_000);
+      if (generation !== this.generation) return;
+      const telemetry = jsonFromOutput<Telemetry>(telemetryResult.output);
+      const phpValues = parseKeyValues(php.output);
+      const flagMode = flagStat.output.split("\n").find((line) => line.includes("flag.txt"))?.trim() ?? "not reported";
+      const httpFlagStatus = flagStatus.output.trim().split("\n").pop()?.trim() ?? "";
+      const problems = validateReconFacts({
+        httpStatus: /HTTP\/1\.[01]\s+(\d{3})/.exec(healthResponse.output)?.[1] ?? "",
+        httpFlagStatus,
+        flagMode,
+        listeners: listeners.output,
+        sapi: health.php_sapi,
+        phpCli: php.output,
+      });
+      const observation: BuildObservation = {
+        phpVersion: health.php_version,
+        sapi: health.php_sapi,
+        memoryLimit: health.memory_limit,
+        postMaxSize: health.post_max_size,
+        uploadMaxFilesize: health.upload_max_filesize,
+        uploadProgress: health.upload_progress,
+        hardLimitDirective: phpValues.hard_limit === "absent" || !phpValues.hard_limit ? null : phpValues.hard_limit,
+        libphpSha256: telemetry.php_binary_sha256,
+        workerCount: telemetry.apache_worker_count,
+        buildInfo: build.output.trim(),
+        flagMode: `${flagMode} · HTTP ${httpFlagStatus}`,
+        observedAt: new Date().toISOString(),
+        raw: [healthResponse.output.slice(0, 4000), php.output, flagStat.output, listeners.output].join("\n---\n"),
+      };
+      const assessment = assessBuild(observation);
+      this.patchExercise({ build: assessment });
+      this.evidence("attacker", "http", "Reconnaissance: real target health response", `attacker: curl http://192.168.10.55/health.php?evidence=${marker}`, healthResponse.output);
+      this.evidence("target", "telemetry", "Reconnaissance: target PHP and patch marker", "target: /usr/local/bin/php + labctl build + stat", observation.raw);
+      this.evidence("target", "telemetry", "Reconnaissance: guest telemetry", "target: labctl telemetry", telemetryResult.output);
+      if (problems.length) throw new Error(problems.join(" · "));
+      this.patch({
+        error: null,
+        notice: `Reconnaissance complete: ${assessment.classification}. ${assessment.basis}`,
+      });
+      this.log(`Target configuration observed and cross-checked: ${assessment.classification}.`, "success");
+      this.settleExerciseStatus();
+      await this.persistReport();
+    } catch (error) {
+      if (generation !== this.generation) return;
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStepFailure("reconnaissance", message);
+      this.patch({ error: `Reconnaissance failed: ${message}` });
+      this.settleExerciseStatus();
+    } finally {
+      if (generation === this.generation) this.patch({ operation: null });
+    }
+  };
+
+  /** Step 2: ordinary HTTP traffic from the attacker guest, corroborated by the target. */
+  runBaselineSuite = async (): Promise<void> => {
+    if (this.state.operation || !this.runtime.attacker || !this.runtime.target || !["ready", "testing", "completed"].includes(this.state.status)) return;
+    const generation = this.generation;
+    this.clearStepFailure("baseline");
+    this.patch({ operation: "Sending baseline requests from the attacker", status: "testing", error: null });
+    const id = randomToken(5);
+    const markers: [string, string, string] = [`base-get-${id}`, `base-login-${id}`, `base-post-${id}`];
+    try {
+      const plan = [
+        { marker: markers[0], method: "GET", path: `/?evidence=${markers[0]}`, command: `curl --noproxy '*' --max-time 20 -sS -i 'http://192.168.10.55/?evidence=${markers[0]}'`, expect: "HTTP/1." },
+        { marker: markers[1], method: "GET", path: `/wp-login.php?evidence=${markers[1]}`, command: `curl --noproxy '*' --max-time 20 -sS -i 'http://192.168.10.55/wp-login.php?evidence=${markers[1]}'`, expect: "HTTP/1." },
+        { marker: markers[2], method: "POST", path: `/wp-login.php?evidence=${markers[2]}`, command: `curl --noproxy '*' --max-time 20 -sS -i -X POST -d 'log=analyst&pwd=range' 'http://192.168.10.55/wp-login.php?evidence=${markers[2]}'`, expect: "Training credentials accepted" },
+      ];
+      const requests: { method: string; path: string; status: string; marker: string }[] = [];
+      for (const item of plan) {
+        const result = await this.command("attacker", item.command, 35_000);
+        if (generation !== this.generation) return;
+        if (!result.output.includes(item.expect)) throw new Error(`${item.method} ${item.path} did not produce the expected response marker "${item.expect}": ${result.output.slice(-800)}`);
+        const status = /HTTP\/1\.[01]\s+(\d{3})/.exec(result.output)?.[1] ?? "unknown";
+        requests.push({ method: item.method, path: item.path, status, marker: item.marker });
+        this.evidence("attacker", "http", `Baseline ${item.method} ${item.marker}`, `attacker: ${item.command}`, result.output);
+      }
+      const logs = await this.command("target", "labctl logs access", 25_000);
+      if (generation !== this.generation) return;
+      const corroborated = markers.filter((marker) => logs.output.includes(marker));
+      this.patch({ logs: { ...this.state.logs, access: logs.output } });
+      this.evidence("target", "log", "Baseline requests corroborated by Apache", "target: /var/log/apache2/access.log", logs.output);
+      if (corroborated.length !== markers.length) {
+        throw new Error(`Only ${corroborated.length}/${markers.length} baseline markers appeared in the target access log: ${markers.join(", ")}`);
+      }
+      this.patchExercise({
+        baseline: { markers, corroborated, requests, observedAt: new Date().toISOString() },
+      });
+      this.patch({ notice: `${requests.length} baseline exchanges returned real responses and every marker was corroborated by the target access log.` });
+      this.log("Baseline traffic completed with target-log corroboration.", "success");
+      this.settleExerciseStatus();
+      await this.persistReport();
+    } catch (error) {
+      if (generation !== this.generation) return;
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStepFailure("baseline", message);
+      this.patch({ error: `Baseline testing failed: ${message}` });
+      this.settleExerciseStatus();
+    } finally {
+      if (generation === this.generation) this.patch({ operation: null });
+    }
+  };
+
+  /** Step 3: prove the real proxy path, including a body the proxy modified. */
+  analyzeProxiedRequests = async (): Promise<void> => {
+    if (this.state.operation || !this.runtime.attacker || !this.runtime.target || !["ready", "testing", "completed"].includes(this.state.status)) return;
+    const generation = this.generation;
+    this.clearStepFailure("request-analysis");
+    this.patch({ operation: "Routing requests through RangeProxy", status: "testing", error: null });
+    const id = randomToken(5);
+    const marker = `analysis-${id}`;
+    const modifiedMarker = `repeater-${id}`;
+    let restoreIntercept = false;
+    const restoreInterceptMode = async () => {
+      if (!restoreIntercept || generation !== this.generation || !this.runtime.attacker) return;
+      try {
+        await this.command("attacker", "curl --noproxy '*' --max-time 5 -sS -X POST -d '' http://127.0.0.1:8081/toggle >/dev/null", 10_000);
+        restoreIntercept = false;
+      } catch (error) {
+        this.log(`Could not restore the prior RangeProxy intercept setting: ${error instanceof Error ? error.message : String(error)}`, "warning");
+      }
+    };
+    try {
+      // A held request would never reach the target; use the proxy's own state
+      // endpoint rather than assuming interception is off.
+      const proxyState = await this.command("attacker", "labctl proxy-state", 15_000);
+      restoreIntercept = jsonFromOutput<{ intercept: boolean }>(proxyState.output).intercept === true;
+      if (restoreIntercept) {
+        this.patch({ operation: "Temporarily disabling RangeProxy intercept" });
+        await this.command("attacker", "curl --noproxy '*' --max-time 5 -sS -X POST -d '' http://127.0.0.1:8081/toggle >/dev/null", 10_000);
+      }
+      const forwarded = await this.command("attacker", `curl -x http://127.0.0.1:8080 --max-time 25 -sS -i 'http://192.168.10.55/health.php?evidence=${marker}'`, 40_000);
+      if (generation !== this.generation) return;
+      if (!/HTTP\/1\.[01] 200/.test(forwarded.output)) throw new Error(`RangeProxy did not return HTTP 200 for the proxied request: ${forwarded.output.slice(-800)}`);
+      const modified = await this.command("attacker", `curl -x http://127.0.0.1:8080 --max-time 25 -sS -i -X POST -d 'log=analyst&pwd=range' 'http://192.168.10.55/wp-login.php?evidence=${modifiedMarker}'`, 40_000);
+      if (generation !== this.generation) return;
+      const proxyEvidence = await this.command("attacker", "labctl evidence", 35_000);
+      if (generation !== this.generation) return;
+      const records = parseProxyEvidence(proxyEvidence.output);
+      let proxySequence: number | null = null;
+      for (const record of records) {
+        try {
+          if (evidenceRequest(record).includes(marker)) proxySequence = record.sequence;
+        } catch {
+          // A record whose request cannot be decoded is not counted as evidence.
+        }
+      }
+      if (proxySequence === null) throw new Error(`The attacker guest's proxy record does not contain the marker ${marker}; the request did not demonstrably pass through RangeProxy.`);
+      const logs = await this.command("target", "labctl logs access", 25_000);
+      if (generation !== this.generation) return;
+      const targetLines = logs.output.split("\n").filter((line) => line.includes(marker) || line.includes(modifiedMarker));
+      this.patch({ logs: { ...this.state.logs, access: logs.output } });
+      if (!targetLines.some((line) => line.includes(marker))) throw new Error(`The target access log has no line for the forwarded marker ${marker}.`);
+      if (!targetLines.some((line) => line.includes(modifiedMarker))) throw new Error(`The target access log has no line for the modified marker ${modifiedMarker}.`);
+      const modifiedAccepted = modified.output.includes("Training credentials accepted");
+      this.patchExercise({
+        proxyAnalysis: {
+          marker,
+          modifiedMarker,
+          proxySequence,
+          targetLines,
+          modifiedAccepted,
+          observedAt: new Date().toISOString(),
+        },
+      });
+      this.evidence("attacker", "proxy", "Proxy forwarded request", `attacker: curl -x http://127.0.0.1:8080 http://192.168.10.55/health.php?evidence=${marker}`, forwarded.output);
+      this.evidence("attacker", "proxy", "Proxy-modified POST", `attacker: curl -x http://127.0.0.1:8080 -X POST http://192.168.10.55/wp-login.php?evidence=${modifiedMarker}`, modified.output);
+      this.evidence("target", "log", "Proxied requests seen by Apache", "target: /var/log/apache2/access.log", targetLines.join("\n"));
+      await restoreInterceptMode();
+      this.patch({ notice: `RangeProxy record #${proxySequence} forwarded ${marker}; the target accepted the modified POST ${modifiedMarker} and logged both.` });
+      this.log("Request analysis completed through the real proxy with target corroboration.", "success");
+      this.settleExerciseStatus();
+      await this.persistReport();
+    } catch (error) {
+      if (generation !== this.generation) return;
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStepFailure("request-analysis", message);
+      this.patch({ error: `Request analysis failed: ${message}` });
+      this.settleExerciseStatus();
+    } finally {
+      await restoreInterceptMode();
+      if (generation === this.generation) this.patch({ operation: null });
+    }
+  };
+
+  /** Step 4: classify the running build and record every applicable condition. */
+  investigateVulnerability = async (): Promise<void> => {
+    if (this.state.operation || !this.runtime.target || !["ready", "testing", "completed"].includes(this.state.status)) return;
+    const generation = this.generation;
+    this.clearStepFailure("investigation");
+    this.patch({ operation: "Classifying the running build", status: "testing", error: null });
+    try {
+      const config = await this.command("target", "httpd -M 2>&1 | grep -i php_module; printf '\\n'; grep -E '^(memory_limit|post_max_size|upload_max_filesize|max_file_uploads|max_input_vars|max_input_nesting_level|session.upload_progress)' /etc/php/php.ini; printf '\\n'; cat /etc/cyber-range/build-info; printf '\\n'; /usr/local/bin/php -v | head -2", 30_000);
+      if (generation !== this.generation) return;
+      const current = this.state.exercise.build;
+      if (!current) throw new Error("Reconnaissance has not recorded the target configuration yet. Run step 1 first.");
+      const refreshed = assessBuild({ ...current.observation, buildInfo: config.output.trim().split("\n").slice(0, 8).join("\n") || current.observation.buildInfo });
+      this.patchExercise({ build: refreshed });
+      this.evidence("target", "telemetry", "Vulnerability-mode verification", "target: httpd -M, /etc/php/php.ini, /etc/cyber-range/build-info, php -v", config.output);
+      if (refreshed.classification === "unknown") throw new Error(`The build could not be classified: ${refreshed.basis}`);
+      const unmet = refreshed.conditions.filter((condition) => !condition.met && condition.id !== "parser-cap");
+      this.patch({
+        notice: `${refreshed.classification}. ${refreshed.basis}`,
+        error: null,
+      });
+      this.log(`Build classified as ${refreshed.classification} from observed values; ${unmet.length} condition(s) not met.`, "success");
+      this.settleExerciseStatus();
+      await this.persistReport();
+    } catch (error) {
+      if (generation !== this.generation) return;
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStepFailure("investigation", message);
+      this.patch({ error: `Vulnerability investigation failed: ${message}` });
+      this.settleExerciseStatus();
+    } finally {
+      if (generation === this.generation) this.patch({ operation: null });
+    }
+  };
+
+  /** Step 5: one bounded, real request-processing probe with full target observation. */
+  runControlledProbe = async (mib = 8, confirmLarge = false): Promise<void> => {
+    if (this.state.operation || !this.runtime.attacker || !this.runtime.target || !["ready", "testing", "completed"].includes(this.state.status)) return;
+    if (!Number.isInteger(mib) || mib < 1 || mib > 64) {
+      this.patch({ error: "The controlled probe accepts 1–64 MiB only. Larger streams are not part of this exercise." });
+      return;
+    }
+    if (mib > 16 && !confirmLarge) {
+      this.patch({ error: `A ${mib} MiB probe can terminate Apache workers. Re-run with explicit confirmation after reading the warning.` });
+      return;
+    }
+    const generation = this.generation;
+    this.clearStepFailure("reproduction");
+    this.patch({ operation: `Sending a ${mib} MiB multipart probe to the isolated target`, status: "testing", error: null });
+    const marker = `probe-${randomToken(6)}`;
+    const startedAt = new Date().toISOString();
+    try {
+      const before = await this.command("target", "pidof httpd || true", 20_000);
+      if (generation !== this.generation) return;
+      const workerList = (output: string) => output.trim().split(/\s+/).filter(Boolean);
+      const workersBeforePids = workerList(before.output);
+      const timeout = Math.min(900_000, 120_000 + mib * 20_000);
+      // The raw evidence file can hold a 256 KiB response preview. Extract a
+      // bounded, valid JSON summary in the guest so serial framing stays intact.
+      const probe = await this.requireSerial("attacker").exec(
+        `python3 ~/exploit.py oom-probe --mib ${mib}${mib > 32 ? " --i-understand-oom" : ""}; latest=$(ls -t /home/tc/lab-evidence/probe-oom-*.json 2>/dev/null | head -1); echo "EVIDENCE_FILE=$latest"; if [ -n "$latest" ]; then python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));r=d.get("response_preview_latin1","");print(json.dumps({"response_preview":r[:4000],"response_bytes":d.get("response_bytes"),"transport_error":d.get("transport_error"),"elapsed_ms":d.get("elapsed_ms"),"rce_claimed":d.get("rce_claimed")}))' "$latest"; fi`,
+        timeout,
+      );
+      if (generation !== this.generation) return;
+      const evidenceFile = /EVIDENCE_FILE=(\S+)/.exec(probe.output)?.[1] ?? "";
+      if (!evidenceFile) throw new Error(`The guest research harness produced no evidence file: ${probe.output.slice(-1200)}`);
+      const record = jsonFromOutput<{ response_preview?: string; transport_error?: string | null; elapsed_ms?: number; response_bytes?: number; rce_claimed?: boolean }>(probe.output);
+      const response = record.response_preview ?? "";
+      if (record.rce_claimed === true) throw new Error("The guest harness reported an RCE claim; this lab does not accept harness claims as exploitation evidence.");
+      const after = await this.command("target", "pidof httpd || true; printf '\\n'; labctl telemetry", 30_000);
+      const telemetry = jsonFromOutput<Telemetry>(after.output);
+      const phpLog = await this.command("target", "labctl logs php", 25_000);
+      const errorLog = await this.command("target", "labctl logs error", 25_000);
+      const accessLog = await this.command("target", "labctl logs access", 25_000);
+      if (generation !== this.generation) return;
+      const workersAfterPids = workerList(after.output.split("\n").slice(0, 1).join(" "));
+      const outcome = classifyProbeOutcome({
+        response,
+        phpLog: phpLog.output,
+        errorLog: errorLog.output,
+        accessLog: accessLog.output,
+        workersBefore: workersBeforePids.length,
+        workersAfter: telemetry.apache_worker_count,
+        transportError: record.transport_error ?? null,
+        marker,
+      });
+      const observation: ProbeObservation = {
+        id: marker,
+        marker,
+        mib,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        httpStatus: outcome.httpStatus,
+        responsePreview: response.slice(0, 20_000),
+        targetPhpLog: phpLog.output.slice(-20_000),
+        targetErrorLog: errorLog.output.slice(-20_000),
+        targetAccessLog: accessLog.output.slice(-20_000),
+        workersBefore: workersBeforePids.length,
+        workersAfter: telemetry.apache_worker_count,
+        workersBeforePids: workersBeforePids.join(" "),
+        workersAfterPids: workersAfterPids.join(" "),
+        attackerEvidence: evidenceFile,
+        oomObserved: outcome.oomObserved,
+        parserCapObserved: outcome.parserCapObserved,
+        outcome: outcome.outcome,
+        interpretation: outcome.interpretation,
+      };
+      this.patchExercise({ probe: observation });
+      this.patch({ logs: { access: accessLog.output, error: errorLog.output, php: phpLog.output } });
+      this.evidence("attacker", "http", `Controlled probe (${mib} MiB) transport record`, `attacker: python3 ~/exploit.py oom-probe --mib ${mib} · ${evidenceFile}`, probe.output);
+      this.evidence("target", "log", "Probe result in the target's own logs", "target: /var/log/apache2/{php-error,error,access}.log", [phpLog.output, errorLog.output, accessLog.output].join("\n---\n"));
+      this.patch({ notice: `Probe ${marker}: ${outcome.outcome}. ${outcome.interpretation}` });
+      this.log(`Controlled probe finished with outcome "${outcome.outcome}" and target-side log capture.`, outcome.outcome === "transport-error" ? "warning" : "success");
+      this.settleExerciseStatus();
+      await this.persistReport();
+    } catch (error) {
+      if (generation !== this.generation) return;
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStepFailure("reproduction", message);
+      this.patch({ error: `Controlled reproduction failed: ${message}` });
+      this.settleExerciseStatus();
+    } finally {
+      if (generation === this.generation) this.patch({ operation: null });
+    }
+  };
+
+  /** Step 6: check the target's own state and look for genuine execution evidence. */
+  verifyTargetSide = async (): Promise<void> => {
+    if (this.state.operation || !this.runtime.target || !["ready", "testing", "completed"].includes(this.state.status)) return;
+    const session = this.state.session;
+    if (!session) return;
+    const generation = this.generation;
+    this.clearStepFailure("target-verification");
+    this.patch({ operation: "Verifying target-side state", status: "testing", error: null });
+    try {
+      const workers = await this.command("target", "pidof httpd || true; printf '\\n'; labctl telemetry", 30_000);
+      const phpLog = await this.command("target", "labctl logs php", 25_000);
+      const proofStat = await this.command("target", "stat -c '%U %a %Y %n' /var/www/html/flag.txt; if [ -e /var/www/html/rce-proof.txt ]; then stat -c '%U %a %Y %s %n' /var/www/html/rce-proof.txt; else echo 'rce-proof.txt absent'; fi", 25_000);
+      const evidenceCheck = await this.requireSerial("target").exec(`labctl evidence '${session.challenge}'`, 20_000);
+      if (generation !== this.generation) return;
+      const parsed = (() => {
+        try {
+          return jsonFromOutput<{ rce_evidence: boolean; owner: string; path: string; challenge_match: boolean }>(evidenceCheck.output);
+        } catch {
+          return null;
+        }
+      })();
+      const genuineProof = Boolean(parsed && parsed.rce_evidence && parsed.owner === "apache" && parsed.challenge_match);
+      if (genuineProof && parsed && !session.proof) {
+        this.patch({ session: { ...session, proof: { observedAt: new Date().toISOString(), owner: parsed.owner, path: parsed.path, data: evidenceCheck.output } } });
+        this.evidence("target", "rce-proof", "Apache-worker execution proof observed", "target: labctl evidence (ownership + challenge + session mtime)", evidenceCheck.output);
+      }
+      const summary = genuineProof
+        ? "The target holds a fresh challenge file owned by apache whose content matches this session."
+        : "No Apache-owned challenge proof exists for this session.";
+      this.patchExercise({
+        targetVerification: {
+          observedAt: new Date().toISOString(),
+          workers: workers.output.trim(),
+          phpLogTail: phpLog.output.slice(-20_000),
+          proofCheck: `${proofStat.output}\nlabctl evidence exit=${evidenceCheck.exitCode}\n${evidenceCheck.output}`.slice(-20_000),
+          genuineProof,
+          summary,
+        },
+      });
+      this.evidence("target", "log", "Target-side verification", "target: pidof httpd, labctl telemetry, labctl evidence, /var/www/html stat", `${workers.output}\n${phpLog.output}\n${proofStat.output}\n${evidenceCheck.output}`);
+      this.patch({ notice: summary, error: null });
+      this.log(summary, genuineProof ? "success" : "info");
+      this.settleExerciseStatus();
+      await this.persistReport();
+    } catch (error) {
+      if (generation !== this.generation) return;
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStepFailure("target-verification", message);
+      this.patch({ error: `Target-side verification failed: ${message}` });
+      this.settleExerciseStatus();
+    } finally {
+      if (generation === this.generation) this.patch({ operation: null });
+    }
+  };
+
+  /** Step 7: compare the running build against the verified patch and mitigations. */
+  compareRemediation = async (): Promise<void> => {
+    if (this.state.operation || !["ready", "testing", "completed"].includes(this.state.status)) return;
+    const generation = this.generation;
+    this.clearStepFailure("remediation");
+    this.patch({ operation: "Comparing builds and mitigations", status: "testing", error: null });
+    try {
+      const build = this.state.exercise.build;
+      if (!build) throw new Error("The running build has not been inspected yet.");
+      const patchedAsset = this.state.manifest?.targets.find((target) => target.buildRole === "patched");
+      const patchedImageAvailable = Boolean(patchedAsset?.image.available);
+      const patchMarkerPresent = build.observation.hardLimitDirective !== null;
+      const comparison = [
+        `Advisory ${ADVISORY.advisory} (${ADVISORY.id}) lists affected ${ADVISORY.affected.join(", ")} and patched ${ADVISORY.patched.join(", ")}.`,
+        `This target runs PHP ${build.observation.phpVersion} with ${build.observation.sapi}; ${patchMarkerPresent ? "the 8.2.35 allocator patch marker is present" : `the ${PATCH_INI_MARKER} marker from the 8.2.35 allocator patch is absent`}.`,
+        `Pinned sources re-verified: ${PINNED_SOURCES.map((source) => `${source.tag} ${source.sha256.slice(0, 16)}…`).join(", ")}.`,
+        `First fixed 8.2 release: 8.2.${PATCHED_RELEASES["8.2"]}.`,
+      ].join(" ");
+      const limitation = patchedImageAvailable
+        ? "The patched PHP 8.2.35 image is installed. Stop both machines, select it, cold-boot, and repeat the probe to compare observed behaviour."
+        : "The PHP 8.2.35 comparison image is not provisioned in this workspace, so the patch comparison is established from the verified source diff and the running build's marker, not from a second boot.";
+      const observation = {
+        observedAt: new Date().toISOString(),
+        runningBuild: `${build.classification} (PHP ${build.observation.phpVersion}, ${build.observation.sapi})`,
+        patchMarkerPresent,
+        patchedImageAvailable,
+        comparison,
+        advisoryGuidance: [...ADVISORY_GUIDANCE],
+        limitation,
+      };
+      this.patchExercise({ remediation: observation });
+      this.evidence("target", "system", "Remediation comparison", "verified advisory + pinned source diff + running build marker", `${comparison}\n\n${ADVISORY_GUIDANCE.map((item) => `- ${item}`).join("\n")}\n\n${limitation}`);
+      this.patch({ notice: limitation, error: null });
+      this.log("Remediation comparison recorded against the verified patch and the running build.", "success");
+      this.settleExerciseStatus();
+      await this.persistReport();
+    } catch (error) {
+      if (generation !== this.generation) return;
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStepFailure("remediation", message);
+      this.patch({ error: `Remediation comparison failed: ${message}` });
+      this.settleExerciseStatus();
+    } finally {
+      if (generation === this.generation) this.patch({ operation: null });
+    }
+  };
+
+  /**
+   * Explicitly labelled training simulation. It is a knowledge check answered
+   * from observed build facts: no shell, no target effect, and never genuine
+   * exploitation status.
+   */
+  answerSimulation = (questionId: string, choice: string): void => {
+    const build = this.state.exercise.build;
+    if (!build) {
+      this.patch({ error: "The simulation is answered from observed values. Run reconnaissance first." });
+      return;
+    }
+    if (this.state.completedAs === "genuine-rce") {
+      this.patch({ error: "Genuine exploitation completion is already recorded; the simulation is not needed and will not be mixed with it." });
+      return;
+    }
+    const question = SIMULATION_QUESTIONS.find((item) => item.id === questionId);
+    if (!question) {
+      this.patch({ error: `Unknown simulation question: ${questionId}` });
+      return;
+    }
+    const answer = validateSimulationAnswer(question, choice, build);
+    const previous = this.state.exercise.simulation;
+    const answers = [...(previous?.answers ?? []).filter((item) => item.questionId !== questionId), answer];
+    const passed = SIMULATION_QUESTIONS.every((item) => answers.find((entry) => entry.questionId === item.id && entry.correct));
+    this.patchExercise({
+      simulation: {
+        answers,
+        passed,
+        completedAt: passed ? new Date().toISOString() : undefined,
+        note: "Training simulation. It checks your reading of the real guest configuration; it does not exercise the target and is not RCE evidence.",
+      },
+    });
+    if (passed) {
+      this.patch({
+        completedAs: "simulated-exercise",
+        notice: "Training simulation complete. This is recorded as SIMULATION ONLY: no target-side code execution, no shell, and no genuine CTF completion.",
+      });
+      this.evidence("attacker", "system", "Training simulation completed (not exploitation)", "parent UI knowledge check answered from observed target facts", answers.map((entry) => `${entry.questionId}: ${entry.choice} (${entry.correct ? "correct" : "incorrect"})`).join("\n"));
+      this.log("Training simulation completed and labelled as simulated; genuine exploitation status is unchanged.", "warning");
+    } else {
+      this.patch({ notice: answer.correct ? `Correct: ${question.because}` : `Not correct. Observed value: ${answer.observedValue}. ${question.because}` });
+    }
+    this.settleExerciseStatus();
+    void this.persistReport();
+  };
+
+  /**
+   * Reset the exercise against the real guest: cold-boot the target, generate a
+   * new session flag and challenge inside it, remove the previous proof, and
+   * clear parent-side progress only after the guest confirms the new state.
+   */
+  resetExercise = async (): Promise<void> => {
+    if (this.state.operation) return;
+    const runtime = this.runtime.target;
+    const session = this.state.session;
+    if (!runtime || !session || !this.sessionProvisioned) {
+      this.patch({ error: "A running, provisioned target is required to reset the exercise. Start the lab first." });
+      return;
+    }
+    const generation = ++this.generation;
+    const previousDigest = session.flagSha256;
+    this.telemetryRunning = false;
+    runtime.serial.cancelCommands(new Error("Target exercise reset"));
+    this.targetSerialSealed = false;
+    this.patch({ operation: "Resetting the target exercise", status: "resetting", error: null, completedAs: null });
+    try {
+      const challenge = randomToken(24);
+      this.patch({
+        session: { ...session, challenge, flagSha256: "", proof: undefined, flagSubmittedAt: undefined },
+        exercise: emptyExercise(),
+      });
+      runtime.emulator.restart();
+      await runtime.serial.waitFor(/[$#] /, BOOT_TIMEOUT, false);
+      if (generation !== this.generation) return;
+      await this.provisionTarget(runtime.serial);
+      if (generation !== this.generation) return;
+      await this.waitGuestReady("target", false);
+      this.patch({ status: "initializing-network", checks: NETWORK_CHECKS.map((check) => ({ ...check })) });
+      await this.verifyNetwork(generation);
+      await this.refreshTarget(false);
+      if (generation !== this.generation) return;
+      const proofCheck = await this.requireSerial("target").exec("if [ -e /var/www/html/rce-proof.txt ]; then stat -c '%U %a %Y %n' /var/www/html/rce-proof.txt; else echo 'rce-proof.txt absent'; fi; stat -c '%U %G %a %n' /var/www/html/flag.txt", 20_000);
+      if (generation !== this.generation) return;
+      const newDigest = this.state.session?.flagSha256 ?? "";
+      const rotated = Boolean(previousDigest && newDigest && newDigest !== previousDigest);
+      if (!newDigest || newDigest === previousDigest) throw new Error("The target reported the same flag digest after reset; a fresh session-specific flag was not generated.");
+      if (!proofCheck.output.includes("rce-proof.txt absent")) throw new Error("The previous execution proof still exists after the target reset.");
+      this.targetSerialSealed = true;
+      this.patch({ status: "ready" });
+      this.evidence("target", "system", "Target exercise reset verified in the guest", "target: labctl provision + stat /var/www/html", `previous_flag_sha256=${previousDigest.slice(0, 16)}…\nnew_flag_sha256=${newDigest.slice(0, 16)}…\nrotated=${rotated}\n${proofCheck.output}`);
+      this.patch({ notice: "Target reset verified in the guest: new session flag and challenge generated inside the target, previous proof removed, parent progress cleared." });
+      this.log("Exercise reset against the real target; a new session-specific flag was generated inside the guest.", "success");
+      await this.persistReport();
+    } catch (error) {
+      if (generation !== this.generation) return;
+      const message = error instanceof Error ? error.message : String(error);
+      this.handleFailure(error, "Exercise reset failed");
+      this.patch({ error: `Exercise reset failed: ${message}` });
+    } finally {
+      if (generation === this.generation) this.patch({ operation: null });
+    }
+  };
+
+  /** Bounded recovery: resume paused emulators, and reboot only an unresponsive guest. */
+  recoverGuests = async (): Promise<void> => {
+    if (this.state.operation || !this.state.session) return;
+    const generation = this.generation;
+    this.patch({ operation: "Checking guest responsiveness", error: null });
+    const attempts = (this.state.recovery?.attempts ?? 0) + 1;
+    try {
+      for (const machine of ["attacker", "target"] as const) {
+        const runtime = this.runtime[machine];
+        if (!runtime) throw new Error(`${machine} is not running; use Start lab.`);
+        if (!runtime.emulator.is_running()) {
+          await runtime.emulator.run();
+          if (!runtime.emulator.is_running()) throw new Error(`${machine} v86 could not be resumed.`);
+        }
+        try {
+          await runtime.serial.exec("labctl ready", 25_000);
+        } catch (error) {
+          if (generation !== this.generation) return;
+          this.patch({ recovery: { attempts, lastAt: new Date().toISOString(), detail: `${machine} was unresponsive; rebooting it.` } });
+          this.log(`${machine} did not answer labctl ready; performing a real v86 reboot.`, "warning");
+          this.patch({ operation: null });
+          await this.rebootMachine(machine);
+          return;
+        }
+      }
+      this.patch({
+        recovery: { attempts, lastAt: new Date().toISOString(), detail: "Both guests answered labctl ready." },
+        notice: "Both guests responded to real readiness checks; no reset was needed.",
+      });
+      this.log("Guest responsiveness verified.", "success");
+    } catch (error) {
+      if (generation !== this.generation) return;
+      this.patch({ recovery: { attempts, lastAt: new Date().toISOString(), detail: error instanceof Error ? error.message : String(error) } });
+      this.patch({ error: `Recovery failed: ${error instanceof Error ? error.message : String(error)}` });
+    } finally {
+      if (generation === this.generation) this.patch({ operation: null });
+    }
+  };
+
+  /** Exposed for the UI so a step is never shown as complete without its facts. */
+  exerciseSummary = (): ReturnType<typeof evaluateExercise> => evaluateExercise(this.state);
+
   submitFlag = async (value: string): Promise<boolean> => {
     const session = this.state.session;
     const generation = this.generation;
     if (!session) {
       this.patch({ error: "Start a lab before submitting a flag." });
+      return false;
+    }
+    const progress = evaluateExercise(this.state);
+    const unmet = progress.steps.filter((step) => step.id !== "completion" && step.status !== "passed");
+    if (unmet.length) {
+      this.patch({ error: `The completion step unlocks only after its real requirements are met. Outstanding: ${unmet.map((step) => step.title).join(", ")}.` });
       return false;
     }
     const submitted = value.trim();
@@ -936,6 +1578,11 @@ export class LabController {
     }
     if (!session.proof) {
       this.patch({ error: "The flag matches, but fresh Apache-worker execution evidence is absent. Reading the flag through administration, a snapshot, or this client is not sufficient." });
+      return false;
+    }
+    const check = validateGenuineCompletion({ session: { ...session, flagSubmittedAt: new Date().toISOString() }, completedAs: "genuine-rce" });
+    if (!check.ok) {
+      this.patch({ error: `Genuine completion was refused: ${check.reason}` });
       return false;
     }
     const flagSubmittedAt = new Date().toISOString();
@@ -1070,7 +1717,7 @@ export class LabController {
     this.sessionProvisioned = false;
     this.state = { ...freshState(), snapshots, resourceMode: this.state.resourceMode, selectedTarget: this.state.selectedTarget, manifest: this.state.manifest };
     this.emit();
-    this.patch({ operation: null, notice: "Session, flag, challenge, proxy history, and guest changes were reset. Cached verified assets and explicitly saved snapshots were retained." });
+    this.patch({ operation: null, notice: "Session, flag, challenge, exercise progress, proxy history, and guest changes were reset. Cached verified assets and explicitly saved snapshots were retained." });
     await clearProgress("last-report").catch(() => undefined);
     this.log("Lab reset to its initial not-started state.");
   };
@@ -1107,6 +1754,7 @@ export class LabController {
       session: this.state.session,
       evidence: this.state.evidence,
       checks: this.state.checks,
+      exercise: this.state.exercise,
       completedAs: this.state.completedAs,
       savedAt: new Date().toISOString(),
     }).catch((error) => this.patch({ notice: `Report persistence failed: ${error instanceof Error ? error.message : String(error)}` }));

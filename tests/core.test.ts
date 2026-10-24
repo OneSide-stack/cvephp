@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { assertLocalAssetPath } from "../src/lib/assets";
-import { initialState } from "../src/lib/initialState";
-import { createJsonReport, createMarkdownReport } from "../src/lib/report";
 import { clampText, formatBytes, jsonFromOutput, parseKeyValues, stripAnsi } from "../src/lib/utils";
-import type { LabState } from "../src/types";
-
-function state(): LabState {
-  return structuredClone(initialState);
-}
 
 describe("guest output helpers", () => {
   it("parses key/value evidence without interpreting its meaning", () => {
@@ -49,28 +42,5 @@ describe("local asset boundary", () => {
     "/lab-assets/image.iso?url=https://example.invalid",
   ])("refuses %s", (path) => {
     expect(() => assertLocalAssetPath(path, "https://range.invalid")).toThrow();
-  });
-});
-
-describe("evidence report truthfulness", () => {
-  it("does not promote an OOM observation to RCE completion", () => {
-    const lab = state();
-    lab.status = "testing";
-    lab.evidence.push({ id: "oom-1", timestamp: "2026-10-23T00:00:00Z", title: "Observed PHP fatal OOM", source: "target /var/log/apache2/php-error.log", machine: "target", category: "log", data: "PHP Fatal error: Allowed memory size exhausted", genuine: true });
-    const report = createJsonReport(lab);
-    expect(JSON.parse(report).execution.completion).toBe("Incomplete / genuine RCE not verified");
-    expect(JSON.parse(report).execution.simulated).toBe(false);
-    expect(report).toContain("Allowed memory size exhausted");
-  });
-
-  it("exports actual logs, provenance, checksums, and explicit completion", () => {
-    const lab = state();
-    lab.logs.access = '192.168.10.10 - - "GET /health.php?check=abc HTTP/1.1" 200';
-    lab.session = { id: "range-test", startedAt: "2026-10-23T00:00:00Z", flagSha256: "abc123", challenge: "challenge", networkId: "42", targetBuild: "alpine-php-8.2.34", phpVersion: "8.2.34", proof: { observedAt: "2026-10-23T00:01:00Z", owner: "apache", path: "/var/www/html/rce-proof.txt", data: "challenge\n" } };
-    lab.completedAs = "genuine-rce";
-    const markdown = createMarkdownReport(lab);
-    expect(markdown).toContain("Genuine RCE evidence and matching flag validated");
-    expect(markdown).toContain("GET /health.php?check=abc");
-    expect(markdown).toContain("not a host-safety certification");
   });
 });

@@ -1,4 +1,4 @@
-export type ViewId = "attacker" | "target" | "network" | "guide" | "evidence";
+export type ViewId = "attacker" | "target" | "network" | "lab" | "guide";
 export type MachineId = "attacker" | "target";
 export type LabStatus =
   | "not-started"
@@ -152,6 +152,139 @@ export interface SessionInfo {
   };
 }
 
+export type ExerciseStepId =
+  | "reconnaissance"
+  | "baseline"
+  | "request-analysis"
+  | "investigation"
+  | "reproduction"
+  | "target-verification"
+  | "remediation"
+  | "completion";
+
+export type ExerciseStepStatus = "locked" | "available" | "passed" | "limited" | "failed";
+
+export interface ExerciseStep {
+  id: ExerciseStepId;
+  number: string;
+  title: string;
+  objective: string;
+  requirement: string;
+  status: ExerciseStepStatus;
+  detail: string;
+}
+
+export interface BuildObservation {
+  /** Values observed inside the guest, never taken from the manifest. */
+  phpVersion: string;
+  sapi: string;
+  memoryLimit: string;
+  postMaxSize: string;
+  uploadMaxFilesize: string;
+  uploadProgress: boolean;
+  hardLimitDirective: string | null;
+  libphpSha256: string;
+  workerCount: number;
+  buildInfo: string;
+  flagMode: string;
+  observedAt: string;
+  raw: string;
+}
+
+export type BuildClassification = "vulnerable-build" | "patched-build" | "unknown";
+
+export interface BuildAssessment {
+  observation: BuildObservation;
+  classification: BuildClassification;
+  basis: string;
+  conditions: ExerciseCondition[];
+}
+
+export interface ExerciseCondition {
+  id: string;
+  label: string;
+  observed: string;
+  requirement: string;
+  met: boolean;
+  note: string;
+}
+
+export interface ProbeObservation {
+  id: string;
+  marker: string;
+  mib: number;
+  startedAt: string;
+  finishedAt: string;
+  httpStatus: string;
+  responsePreview: string;
+  targetPhpLog: string;
+  targetErrorLog: string;
+  targetAccessLog: string;
+  workersBefore: number;
+  workersAfter: number;
+  workersBeforePids: string;
+  workersAfterPids: string;
+  attackerEvidence: string;
+  oomObserved: boolean;
+  parserCapObserved: boolean;
+  outcome: "oom-observed" | "parser-cap-observed" | "no-target-effect" | "transport-error";
+  interpretation: string;
+}
+
+export interface RemediationObservation {
+  observedAt: string;
+  runningBuild: string;
+  patchMarkerPresent: boolean;
+  patchedImageAvailable: boolean;
+  comparison: string;
+  advisoryGuidance: string[];
+  limitation: string;
+}
+
+export interface SimulationAnswer {
+  questionId: string;
+  choice: string;
+  correct: boolean;
+  observedValue: string;
+}
+
+export interface SimulationState {
+  answers: SimulationAnswer[];
+  passed: boolean;
+  completedAt?: string;
+  note: string;
+}
+
+export interface ExerciseFacts {
+  build: BuildAssessment | null;
+  baseline: {
+    markers: string[];
+    corroborated: string[];
+    requests: { method: string; path: string; status: string; marker: string }[];
+    observedAt: string;
+  } | null;
+  proxyAnalysis: {
+    marker: string;
+    modifiedMarker: string;
+    proxySequence: number | null;
+    targetLines: string[];
+    modifiedAccepted: boolean;
+    observedAt: string;
+  } | null;
+  probe: ProbeObservation | null;
+  targetVerification: {
+    observedAt: string;
+    workers: string;
+    phpLogTail: string;
+    proofCheck: string;
+    genuineProof: boolean;
+    summary: string;
+  } | null;
+  remediation: RemediationObservation | null;
+  simulation: SimulationState | null;
+  failures: Partial<Record<ExerciseStepId, string>>;
+}
+
 export interface SnapshotMeta {
   id: string;
   createdAt: string;
@@ -205,11 +338,13 @@ export interface LabState {
   session: SessionInfo | null;
   snapshots: SnapshotMeta[];
   hasUnsavedProgress: boolean;
-  completedAs: "genuine-rce" | null;
+  completedAs: "genuine-rce" | "simulated-exercise" | null;
   activeSerialMachine: MachineId;
   attackerTools: string[];
   proxyStatus: "unknown" | "running" | "failed";
   proxyAcceptance: ProxyAcceptanceReport | null;
+  exercise: ExerciseFacts;
+  recovery: { attempts: number; lastAt?: string; detail: string } | null;
 }
 
 export const STATUS_LABELS: Record<LabStatus, string> = {

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - arena/5befbcf9-cvephp
+      - arena/90d71991-cvephp
     paths:
       - 'image-build/**'
       - 'scripts/*asset*'

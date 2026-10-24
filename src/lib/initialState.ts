@@ -1,4 +1,5 @@
 import type { LabState, Verification } from "../types";
+import { emptyExercise } from "./exercise";
 
 export const NETWORK_CHECKS: Verification[] = [
   { id: "attacker-ip", label: "Attacker addressing", description: "Confirm eth0 owns 192.168.10.10/24", status: "pending", detail: "Not checked", source: "attacker: ip -4 -o addr show dev eth0" },
@@ -40,4 +41,6 @@ export const initialState: LabState = {
   attackerTools: [],
   proxyStatus: "unknown",
   proxyAcceptance: null,
+  exercise: emptyExercise(),
+  recovery: null,
 };

@@ -1,84 +1,93 @@
 # Acceptance and evidence matrix
 
-This file is deliberately conservative. “Implemented” means code/configuration exists; “tested” means the stated test actually ran; “verified in guest” requires output from the running guest. A build, version string, HTTP status, or static review is not a substitute for the last column.
+“Implemented” means code/configuration exists; “tested” means the named test actually ran;
+“verified in guest” requires output from a running guest. A build, version string, HTTP status or
+static review is not a substitute for the last column.
 
-## Required dual-guest and proxy gates: current result
+## Preserved results from the earlier milestone
 
-[CI run 40081439535](https://github.com/OneSide-stack/cvephp/actions/runs/40081439535), commit `e99922b`, passed on 2026-10-24. It reused the checksummed guest images and completed both independent Playwright/v86 specs in 19.1 minutes. The controller and independent browser checks report each gate separately as PASS, FAIL, or BLOCKED.
+[CI run 40081439535](https://github.com/OneSide-stack/cvephp/actions/runs/40081439535) at commit
+`e99922b` passed on 2026-10-24 and remains the verified baseline for the dual-guest boot, isolated
+networking, real HTTP, target telemetry, intercepting proxy, Repeater, and their error/recovery
+gates (19.1 minutes, both Playwright/v86 specs). Those capabilities were not modified by this
+milestone except for additive target-side commands, so their gates remain the reference evidence.
 
-| Gate | Result | Guest-backed or independent evidence |
+## This milestone: the practical vulnerability lab
+
+| Requirement | Implementation | Test status |
 |---|---|---|
-| Asset preflight | **PASS** | Both ISO entries and pinned v86/firmware were present; start loaded and verified their checksums |
-| Dual boot and usability | **PASS** | TinyCore attacker X/tools and Alpine target display; both machines and the overall lab reached Ready |
-| Isolated network | **PASS** | 8/8 checks: both `/24` addresses, guest ICMP, target TCP :80, HTTP, headers, target log, and no default route on the shared v86 `inbrowser` network |
-| Real HTTP and target corroboration | **PASS** | Attacker curl received the real Assessment Portal; `learner-65a14a13a01f` matched the target's HTTP 200 Apache entry |
-| Target telemetry | **PASS** | Apache/mod_php, PHP 8.2.34/`apache2handler`, 128 MiB PHP limit, live guest/RSS/process measurements, and refreshed guest logs |
-| Proxy process/readiness | **PASS** | The attacker guest reported Dillo, the exact running proxy process, loopback proxy/management listeners, and target-only proxy configuration |
-| Browser routing, interception ON | **PASS** | Real Dillo request `browser-original-61078b18949f` appeared in RangeProxy with GET method, absolute target URL, Host/Dillo headers, and empty GET body visible |
-| Interception and hold | **PASS** | The original request remained held in RangeProxy and was independently absent from Apache before forwarding |
-| Edit and forward | **PASS** | The held request was changed to `browser-edited-13f35f8bdef9`, explicitly forwarded, and returned the target's genuine HTTP 200 response/body |
-| Target-log corroboration | **PASS** | One proxy forward record and one distinct Apache GET corroborated the edited marker (two byte-identical Apache occurrences from the two active logging directives); the original marker remained absent |
-| Browser routing, interception OFF | **PASS** | Dillo request `browser-off-b19af86d80f4` produced both a RangeProxy forwarded record and a distinct Apache GET, ruling out silent direct-route fallback |
-| Repeater | **PASS** | Separately edited POST `repeater-70d06958f9d5` returned the real JSON status/headers/body and was corroborated in Apache; arbitrary methods and general body editing are not claimed |
-| Errors and recovery | **PASS** | Malformed framing rejection, held-request drop without target receipt, bounded proxy-down/paused-target/caller-timeout behavior, proxy/target recovery, and repeated requests all passed |
-| Independent browser and final-log checks | **PASS** | No uncaught parent-browser errors; after an independent manual target refresh, the actual log viewer contained the edited, disabled, Repeater, recovery, and target-recovery markers and still excluded the held original |
-| Parent controls during error tests | **PASS** | The independent spec switched among Attacker, Network, and Target views while error handling ran and confirmed Reset remained enabled; it did not perform a destructive reset |
+| CVE verified from authoritative sources | `docs/CVE-VERIFICATION.md`: GHSA-w8hw-w9fx-j79w retrieved from `github.com`; `php-8.2.34`/`php-8.2.35` tarballs downloaded from `codeload.github.com` and matched against the pinned digests; allocator, `main.c`, Zend and session diffs examined | **Verified from primary sources** (not from a version banner) |
+| Reconnaissance from the real target | `LabController.runRecon` reads `/health.php`, PHP CLI, `labctl telemetry`, `labctl build`, `ss -ltn`, and `stat` on the flag and `libphp.so` | Unit-tested gating and validation; guest-backed gate authored in `tests/guest/lab-exercise.spec.ts` |
+| Baseline testing with target corroboration | `runBaselineSuite`: three unique markers, each required in the real access log | Unit-tested; guest-backed gate authored |
+| Request analysis through proxy/Repeater | `analyzeProxiedRequests`: decoded RangeProxy record plus distinct target log lines for a forwarded request and a modified POST | Unit-tested proxy helpers (inherited); guest-backed gate authored |
+| Vulnerability investigation | `investigateVulnerability` + `assessBuild` + `classifyObservedBuild`: version **and** `memory_hard_limit_percent` marker, conflict → `unknown` | 10 unit tests over vulnerable/patched/conflict/EOL inputs |
+| Controlled reproduction | `runControlledProbe(1–64 MiB)`: real chunked multipart probe, target PHP/error/access logs, worker PIDs and counts before/after, bounded to 64 MiB, second confirmation above 16 MiB | Outcome classification unit-tested; guest-backed gate authored |
+| Target-side verification | `verifyTargetSide`: `pidof httpd`, telemetry, `labctl evidence`, `stat` on flag/proof | Unit-tested verdict logic; guest-backed gate authored |
+| Remediation comparison | `compareRemediation`: patch marker, pinned source digests, first-fixed table, advisory mitigations, explicit limitation when 8.2.35 media is absent | Unit-tested; guest-backed gate authored |
+| Gated completion | `evaluateExercise` derives unlock/status per step; `submitFlag` refuses while prior steps are unmet | 12 unit tests over gating, failures, and session isolation |
+| CTF flag in the target guest | `labctl provision` generates `RANGE{48 hex}` from `/dev/urandom` inside the target, writes `root:apache 0640`, prints only SHA-256; Apache denies `/flag.txt` (HTTP 403) | 24 executed Python tests: generation, rotation, permissions, digest-only output, proof removal, unsafe input, evidence validation |
+| No flag in frontend data | Digest-only client check; unit test scans all `src/**` and fails on any literal flag | Executed: `tests/exercise.test.ts` |
+| Reset restores real guest state | `resetExercise` cold-boots the target, re-provisions, and *requires* a changed digest and an absent previous proof before clearing progress | Guest-backed gate authored; failure logic unit-tested |
+| Recovery | `recoverGuests` resumes a paused emulator, re-runs readiness, reboots only an unresponsive guest | Guest-backed gate authored; error handling reviewed |
+| Genuine versus simulated completion | `validateGenuineCompletion`; simulation stored separately, never sets `genuine-rce`, never shows a shell | 4 unit tests |
 
-The [cyber-range-guest-acceptance artifact](https://github.com/OneSide-stack/cvephp/actions/runs/40081439535/artifacts/12555743192) contains `proxy-acceptance.json`, the independent per-gate/browser summary, raw request/response captures, proxy evidence and diagnostics, guest configuration, target Apache logs (including the final refreshed log), and the independent Playwright report (240,469-byte ZIP; SHA-256 `19fcb90231cecb9d6a1de690751754e6cbe9ad33a6d9559274bf04bd8e52ddaf`). The separate [frontend/guest-tool CI run 40081439566](https://github.com/OneSide-stack/cvephp/actions/runs/40081439566) also passed.
+## Report removal
 
-The earlier required baseline remains [CI run 40067579565](https://github.com/OneSide-stack/cvephp/actions/runs/40067579565) at commit `b82c81f`; its six connectivity/telemetry gates passed independently before the proxy work. None of these results is CVE reproduction, RCE, target-shell, flag-retrieval, snapshot-restoration, or exploit-reliability evidence.
+The Evidence & Report navigation entry, `EvidenceView`, report exports, and `report.ts` were
+removed. Evidence records remain an internal, guest-derived fact store used by the exercise; they
+are no longer a reporting product. The lab view is the fifth navigation entry.
 
-| Capability | Implementation | Test/evidence status |
-|---|---|---|
-| React/TypeScript five-view shell | Implemented: attacker, target, network, guide, evidence/report | TypeScript and Vite build executed locally; browser interaction tests are authored and run by CI when Chromium is available |
-| v86 integration | Implemented with pinned `v86@0.5.472`, local firmware/WASM, real VGA/serial containers | **Verified in guest:** run `40067579565` booted both real guests to Ready |
-| Attacker workstation | TinyCore 11.0 ISO remaster, X11, guest tool inventory, Dillo/terminal launchers | **Verified in guest:** graphical output plus curl/Dillo inventory passed in run `40067579565`; interactive launcher behavior is separate |
-| Target housing | Alpine rootfs/initramfs, Apache prefork/mod_php, PHP 8.2.34 and optional 8.2.35 builds | **Verified in guest:** Alpine display, Apache/mod_php, and PHP 8.2.34 passed; optional 8.2.35 remains separate |
-| Raw isolated networking | `inbrowser` ID 0, origin-wide exclusive Web Lock, concurrent labs refused, no default route/relay/NAT | **Verified in guest:** ICMP/HTTP and no default route passed; exclusive-channel/concurrent-session behavior remains implementation-reviewed |
-| Readiness gate | Eight checks: two addresses, ICMP, listener, HTTP, headers, target access log, isolation | **Verified in guest:** 8/8 passed before Ready in run `40067579565` |
-| Real browser/proxy traffic | Guest Dillo and Python RangeProxy, raw request editor/repeater, target-only destination | **Verified in guest:** run `40081439535` proved Dillo routing with interception ON/OFF, hold/edit/forward, independent Apache corroboration, and a separate edited POST Repeater exchange |
-| Target logs and telemetry | Guest `labctl`, Apache/PHP log tails, `/proc` RSS/memory, PHP health/build identity | **Verified in guest:** fresh health, logs, memory, process, and PHP configuration passed in run `40067579565` |
-| PHP memory semantics | Separate configured 128 MiB limit, Apache/mod_php RSS, and guest memory | Actual values and distinctions **verified in guest**; memory behavior under exploit load remains unverified |
-| Per-session flag | Target `/dev/urandom` generation, target root writes `root:apache 0640`, digest-only client check, serial seal | Static/script checks executed; target filesystem permissions and reboot behavior **unverified** |
-| RCE proof | Apache-owned challenge file with session mtime, then matching flag; no simulation credit | **No RCE reproduction or shell evidence has been obtained**; exact 32-bit reliability remains unverified |
-| OOM research harness | Real streamed multipart probe with bounds and explicit no-RCE interpretation | Unit/static checks only; no OOM probe has run against the target |
-| Snapshots | Paired v86 `save_state()` buffers, IndexedDB metadata, MAC translation, restore revalidation | Quota handling and real save/restore **unverified** |
-| Report export | JSON/Markdown with evidence, logs, build identity, checksums, limitations | Unit-tested for truthfulness and content; browser download tested by Playwright when available |
-| Offline shell | Production service worker plus verified IndexedDB asset cache | Service-worker/offline reload **unverified**; first cache requires local media/server |
-| Parent controls during failure | Outside-canvas controls, cancellation, timeout handling, destructive confirmation | **Tested:** view switching and enabled Reset control passed during bounded proxy error handling in run `40081439535`; destructive reset and unrelated guest-crash behavior remain separately scoped |
-
-## Tests actually executed in the current workspace
-
-The following commands have run successfully after the latest controller edits at the time this document was written:
+## Tests executed in this workspace
 
 ```text
-npm run lint       — strict TypeScript project check
-npm test           — 22 Vitest tests + 8 Python guest-tool tests
-bash -n …          — shell syntax checks for build/boot/control scripts
-python3 -m py_compile … — Python syntax compilation
+npm run lint                — strict TypeScript project check: PASS
+npm test                    — 52 Vitest tests: PASS (4 files)
+                              python3 -m unittest: 25 tests, 24 PASS, 1 skipped
+                              (skip: raising privileges is only observable as root)
+npm run build               — production build: PASS
+npm run test:e2e            — requires a Chromium binary (CI installs one)
+npm run test:e2e:guest      — requires the checksummed guest images and Chromium (CI)
 ```
 
-`npm run build` completed successfully after the controller and UI edits. `npm run test:e2e` also completed locally: **4 Playwright tests passed** using a registry-packaged Chromium binary (persistent view containers, missing-image failure, report export, and narrow layout). This is browser-shell evidence, not guest-boot evidence. GitHub Actions results must be checked separately; a queued or completed image job is not a guest runtime test.
+Unit coverage added in this milestone:
 
-## Minimum real guest acceptance run
+- `tests/exercise.test.ts` — advisory constants, build classification (vulnerable, patched,
+  version/marker conflict, EOL branch, malformed version), target configuration validation (flag
+  HTTP denial, `0640` ownership, listener, SAPI), condition recording, PHP quantity parsing, probe
+  outcome classification (OOM, parser cap, no effect, transport error), step gating and failure
+  surfacing, genuine completion validation and session isolation, digest comparison, flag shape,
+  no-hardcoded-flag scan, simulation separation, reset semantics.
+- `image-build/tests/test_target_labctl.py` — target flag generation/rotation, `0640`/`0600`
+  permissions, digest-only output, previous-proof removal, unsafe/short/long challenge rejection,
+  evidence acceptance only for Apache-owned challenge content newer than session start, non-root
+  refusal, static contracts (no web-route command execution, `flag.txt` denied, build-info keeps the
+  unverified label).
 
-With verified images installed, perform and save evidence for the applicable scope. The current required CI gates cover steps 1–5 and preserve raw artifacts; a PASS there does not imply completion of steps 6–10.
+## New guest-backed acceptance gates
 
-1. Cold boot both guests; confirm real VGA/serial output and no missing/corrupt asset error.
-2. Confirm `192.168.10.10/24` and `192.168.10.55/24` inside the respective guests.
-3. Send attacker-originated ICMP and a uniquely marked HTTP request to `http://192.168.10.55/`; inspect actual target response headers/body and the matching Apache access-log entry.
-4. Refresh target health, all three logs, Apache worker count/RSS, guest memory, PHP memory limit, and build hash. Keep the three memory concepts separate.
-5. Run the real proxy acceptance: route Dillo through RangeProxy with interception ON/OFF, hold a unique request and prove target absence, edit and forward it, independently corroborate Apache, and exercise a separate Repeater request plus bounded failures/recovery. Preserve the per-gate JSON and raw evidence.
-6. Save both states, restore them, and repeat network/service checks. Test quota failure handling with a deliberately constrained browser profile if possible.
-7. Reboot each guest and verify that target provisioning/sealing and session proof invalidation behave as documented.
-8. Run the bounded baseline/OOM research only in the isolated range. Record observed behavior without calling it RCE.
-9. If genuine execution is established on the exact build, create the Apache-owned current-challenge proof through that execution context and submit the flag. Otherwise report RCE as unverified.
-10. Cold-boot the PHP 8.2.35 comparison image and repeat applicable baseline/probe observations; do not describe this as patching the already-running vulnerable VM.
+`tests/guest/lab-exercise.spec.ts` boots both real guests and then, through the UI only:
 
-## Evidence labels
+1. asserts the plaintext flag never appears in page data;
+2. runs each of the seven actionable steps and requires the UI to report **Verified** with an
+   *observed* detail, not a placeholder;
+3. asserts the probe outcome is one of the recorded real outcomes and that the page never claims
+   RCE success;
+4. asserts genuine completion remains unavailable and the blocker is shown;
+5. answers the labelled simulation from the observed values and asserts genuine status is unchanged;
+6. resets the exercise and requires: zero verified steps, a **changed** flag digest, cleared
+   simulation, and a still-running target display;
+7. asserts no uncaught parent-browser errors.
 
-- **Implemented:** code/configuration exists and is identified by path.
-- **Tested:** a named automated or manual test actually executed, with its result.
-- **Verified in guest:** the cited output/file/process came from the running guest.
-- **Limited:** a deliberate constraint such as no backend, proxy size cap, 32-bit profile, or browser quota.
-- **Unverified:** no honest evidence yet. This remains the status for RCE and for capabilities without cited guest evidence.
+## Explicit non-claims
+
+- No genuine CVE-2026-109618 exploitation, RCE, or target shell has been demonstrated on this
+  32-bit Alpine/musl build. `completedAs = "genuine-rce"` cannot be produced without a fresh
+  Apache-owned challenge proof plus the matching session flag.
+- The OOM probe is a bounded research primitive. An observed OOM, a dropped worker, or an HTTP 500
+  is recorded as an observation and never as exploitation.
+- The simulation is a knowledge check over observed facts. It is not exploitation evidence and is
+  never presented as a shell.
+- Distribution backports are not inferred: a version/marker conflict yields `unknown`, and the lab
+  says so instead of guessing.
+- The patched comparison boot requires the optional PHP 8.2.35 image; when it is absent the
+  comparison is explicitly labelled as source-diff-based.
