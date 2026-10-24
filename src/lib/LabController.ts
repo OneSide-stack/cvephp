@@ -654,6 +654,14 @@ export class LabController {
     const generation = this.generation;
     this.patch({ operation: "Reading target telemetry and logs", error: null });
     try {
+      // A periodic telemetry-only read may still own the target serial queue.
+      // Never turn its early return into a false "all logs refreshed" notice.
+      const idleDeadline = Date.now() + 45_000;
+      while (this.telemetryRunning) {
+        if (generation !== this.generation) return;
+        if (Date.now() >= idleDeadline) throw new Error("Background target telemetry did not finish within 45s; manual log refresh was not claimed");
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
       await this.refreshTarget(false);
       if (generation !== this.generation) return;
       this.patch({ notice: "Target status, PHP health, process memory, and all three log files were refreshed from the guest." });

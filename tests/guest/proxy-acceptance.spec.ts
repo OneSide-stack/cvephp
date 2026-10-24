@@ -116,8 +116,13 @@ test("real Dillo interception, editing, Repeater, target logs, and recovery", as
     // than accepting only the controller's earlier log snapshot.
     await page.getByRole("button", { name: "TARGET SERVER HOUSING", exact: true }).click();
     await page.getByRole("button", { name: "Refresh from guest", exact: true }).click();
-    await expect(page.locator(".global-message")).toContainText("Target status, PHP health, process memory, and all three log files were refreshed from the guest.", { timeout: 90_000 });
-    const finalLogs = await page.locator(".logs-panel .log-viewer").innerText();
+    const logViewer = page.locator(".logs-panel .log-viewer");
+    await expect(logViewer).toContainText(markers.edited!, { timeout: 90_000 });
+    await expect(logViewer).toContainText(markers.disabled!);
+    await expect(logViewer).toContainText(markers.repeater!);
+    await expect(logViewer).toContainText(markers.recovery!);
+    await expect(logViewer).toContainText(markers.targetRecovery!);
+    const finalLogs = await logViewer.innerText();
     expect(finalLogs).toContain(markers.edited);
     expect(finalLogs).not.toContain(markers.original);
     expect(finalLogs).toContain(markers.disabled);
