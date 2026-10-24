@@ -6,13 +6,17 @@ plain HTTP destined for the lab target and never provides Internet egress.
 """
 from __future__ import print_function
 
+import sys
+if __name__ == "__main__":
+    print("RANGEPROXY_PYTHON_START")
+    sys.stdout.flush()
+
 import base64
 import json
 import os
 import re
 import socket
 import socketserver
-import sys
 import threading
 import time
 import traceback
@@ -21,6 +25,10 @@ from datetime import datetime
 from http.client import HTTPResponse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlsplit
+
+if __name__ == "__main__":
+    print("RANGEPROXY_IMPORTS_COMPLETE")
+    sys.stdout.flush()
 
 TARGET_HOST = "192.168.10.55"
 TARGET_PORT = 80
@@ -577,8 +585,10 @@ class ManagementHandler(BaseHTTPRequestHandler):
 
 def main():
     print("RangeProxy evidence: %s" % EVIDENCE_FILE)
+    sys.stdout.flush()
     proxy = ProxyTCPServer(("127.0.0.1", PROXY_PORT), ProxyHandler)
-    management = socketserver.ThreadingMixIn()
+    print("RANGEPROXY_PROXY_BOUND port=%d" % PROXY_PORT)
+    sys.stdout.flush()
     # Declared explicitly for Python 3.6, which predates ThreadingHTTPServer.
     class ManagementServer(socketserver.ThreadingMixIn, HTTPServer):
         allow_reuse_address = True

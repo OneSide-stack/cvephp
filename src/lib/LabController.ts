@@ -467,11 +467,11 @@ export class LabController {
     const runtime = this.runtime[machine];
     if (!runtime) throw new Error(`${machine} is not running`);
     let last: unknown;
-    // A refused management connection returns immediately. Keep polling the
-    // real socket for up to two minutes in that case, while retaining the
-    // original twenty-attempt ceiling for slower command/timeout failures.
+    // A refused management connection returns immediately. Python imports can
+    // be slow under x86 emulation, so poll real readiness for up to five
+    // minutes while retaining twenty attempts for slower command timeouts.
     const readinessStarted = Date.now();
-    for (let attempt = 0; attempt < 80; attempt += 1) {
+    for (let attempt = 0; attempt < 200; attempt += 1) {
       try {
         const result = await runtime.serial.exec("labctl ready", 25_000);
         const info = jsonFromOutput<Record<string, string>>(result.output);
@@ -491,7 +491,7 @@ export class LabController {
         return;
       } catch (error) {
         last = error;
-        if (attempt >= 19 && Date.now() - readinessStarted >= 120_000) break;
+        if (attempt >= 19 && Date.now() - readinessStarted >= 300_000) break;
         await sleep(1_500);
       }
     }
