@@ -448,6 +448,13 @@ export class LabController {
       throw new Error(`Target rejected flag provisioning or returned no digest: ${result.output}`);
     }
     this.patch({ session: { ...this.state.session, flagSha256: digest } });
+    // The lab account must be able to traverse this directory to verify the
+    // public provisioning/sealing markers after root access is sealed. The
+    // challenge remains 0600 root-only; this grants no flag or root access.
+    const markerPermissions = await serial.exec("chown root:lab /run/cyber-range && chmod 0750 /run/cyber-range", 10_000);
+    if (markerPermissions.exitCode !== 0) {
+      throw new Error(`Target rejected provisioning-marker permissions: ${markerPermissions.output}`);
+    }
     // Seal the hidden root control shell. The visible target and subsequent
     // telemetry commands run as the unprivileged Alpine 'lab' account.
     serial.sendRaw("labctl seal\n");
@@ -493,7 +500,7 @@ export class LabController {
     let detail = last instanceof Error ? last.message : String(last);
     const diagnosticCommand = machine === "attacker"
       ? "printf '%s\\n' '--- proxy processes ---'; ps; printf '%s\\n' '--- proxy log ---'; cat /tmp/range-proxy.log 2>&1; printf '%s\\n' '--- proxy files ---'; ls -ld /home/tc/lab /home/tc/lab-evidence /tmp/range-proxy.log 2>&1"
-      : "printf '%s\\n' '--- OpenRC services ---'; rc-status --all 2>&1; rc-service apache2 status 2>&1; printf '%s\\n' '--- Apache configuration ---'; httpd -t 2>&1; ls -ld /run/apache2 /var/log/apache2 2>&1; printf '%s\\n' '--- Apache error log ---'; tail -n 80 /var/log/apache2/error.log 2>&1; printf '%s\\n' '--- kernel/system log ---'; tail -n 60 /var/log/messages 2>&1";
+      : "printf '%s\\n' '--- OpenRC services ---'; rc-status --all 2>&1; rc-service apache2 status 2>&1; id; ls -ld /run/cyber-range 2>&1; ls -l /run/cyber-range 2>&1; printf '%s\\n' '--- Apache configuration ---'; httpd -t 2>&1; ls -ld /run/apache2 /var/log/apache2 2>&1; printf '%s\\n' '--- Apache error log ---'; tail -n 80 /var/log/apache2/error.log 2>&1; printf '%s\\n' '--- kernel/system log ---'; tail -n 60 /var/log/messages 2>&1";
     try {
       const diagnostics = await runtime.serial.exec(diagnosticCommand, 15_000);
       detail += `\n${machine} service diagnostics:\n${diagnostics.output.slice(-8000)}`;
