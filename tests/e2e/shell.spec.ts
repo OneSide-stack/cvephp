@@ -46,9 +46,11 @@ test("the lab is honest before a session and has no reporting surface", async ({
 
   // Gated: nothing is awarded and the flag form cannot be used without a session.
   await expect(page.getByText("Locked").first()).toBeVisible();
-  await expect(page.getByText("Not awarded")).toBeVisible();
+  await expect(page.locator(".lab-completion-grid")).toContainText("No shell prompt is ever fabricated by this interface");
+  await expect(page.locator(".lab-side")).toContainText("No active session");
   await expect(page.getByRole("button", { name: "Validate flag", exact: true })).toBeDisabled();
   await expect(page.getByText("Genuine RCE completion is unavailable")).toHaveCount(0);
+  await expect(page.locator(".completion-card")).toHaveCount(0);
 });
 
 test("narrow layouts retain parent VM controls and instructions", async ({ page }) => {

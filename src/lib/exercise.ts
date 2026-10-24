@@ -254,14 +254,17 @@ export function evaluateExercise(state: Pick<LabState, "exercise" | "status" | "
   const blockers: string[] = [];
 
   const networkReady = state.checks.length > 0 && state.checks.every((check) => check.status === "passed");
+  const labRunning = ["ready", "testing", "completed"].includes(state.status);
   const build = facts.build;
   const reconOk = Boolean(build) && networkReady;
 
-  results.reconnaissance = facts.failures.reconnaissance
-    ? { status: "failed", detail: facts.failures.reconnaissance }
-    : reconOk && build
-      ? passed(`${build.classification} · ${build.observation.sapi} · PHP ${build.observation.phpVersion} · ${build.observation.memoryLimit}/${build.observation.postMaxSize}`)
-      : available(networkReady ? "Target not inspected yet. Run the reassessment to read its real configuration." : "Waiting for the isolated network checks to pass on the running guests.");
+  results.reconnaissance = !labRunning
+    ? locked("Start the lab so the real target is running; nothing is inspected before that.")
+    : facts.failures.reconnaissance
+      ? { status: "failed", detail: facts.failures.reconnaissance }
+      : reconOk && build
+        ? passed(`${build.classification} · ${build.observation.sapi} · PHP ${build.observation.phpVersion} · ${build.observation.memoryLimit}/${build.observation.postMaxSize}`)
+        : available(networkReady ? "Target not inspected yet. Run the inspection to read its real configuration." : "Waiting for the isolated network checks to pass on the running guests.");
 
   const baseline = facts.baseline;
   results.baseline = !reconOk

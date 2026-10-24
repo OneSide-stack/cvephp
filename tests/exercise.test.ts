@@ -270,6 +270,13 @@ describe("step gating from real facts", () => {
     expect(progress.genuineCompletion).toBe(false);
   });
 
+  it("keeps every step locked while no guests are running", () => {
+    const idle = evaluateExercise({ ...labState({ status: "not-started" }), exercise: emptyExercise() });
+    expect(idle.steps.every((step) => step.status === "locked")).toBe(true);
+    expect(idle.steps[0]?.detail).toContain("Start the lab");
+    expect(idle.simulationAvailable).toBe(false);
+  });
+
   it("keeps baseline locked while the network checks are incomplete", () => {
     const checks = passedChecks.map((check, index) => index === 0 ? { ...check, status: "failed" as const } : check);
     const progress = evaluateExercise({ ...labState({ checks }), exercise: emptyExercise() });

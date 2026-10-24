@@ -516,6 +516,7 @@ p { color: var(--muted); line-height: 1.65; }
 .lab-step-detail { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; padding: 8px 10px; background: #0f181e; border: 1px solid var(--border-soft); border-radius: 4px; }
 .lab-step-detail strong { color: var(--faint); font: 9px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
 .lab-step-detail span { color: #a3b7bd; font: 10px/1.55 var(--mono); overflow-wrap: anywhere; }
+.lab-step-body > .button { align-self: flex-start; }
 .lab-step-failure { display: flex; align-items: flex-start; gap: 6px; color: #e28d8d; font-size: 10px; }
 .lab-step-failure svg { flex: 0 0 auto; margin-top: 1px; }
 .probe-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }

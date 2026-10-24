@@ -59,7 +59,7 @@ export default function App() {
         </div>
       </div>
       <nav className="top-navigation" aria-label="Lab views">
-        {navigation.map(({ id, label, icon: Icon }) => <button key={id} className={state.view === id ? "active" : ""} onClick={() => controller.setView(id)} aria-current={state.view === id ? "page" : undefined}><Icon size={15} /><span>{label}</span>{id === "lab" && <b>{controller.exerciseSummary().steps.filter((step) => step.status === "passed").length}/8</b>}</button>)}
+        {navigation.map(({ id, label, icon: Icon }) => <button key={id} className={state.view === id ? "active" : ""} onClick={() => controller.setView(id)} aria-current={state.view === id ? "page" : undefined}><Icon size={15} /><span>{label}</span></button>)}
       </nav>
     </header>
 
