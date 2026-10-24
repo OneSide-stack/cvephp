@@ -26,6 +26,7 @@ import {
   type SnapshotRecord,
 } from "./storage";
 import { clampText, jsonFromOutput, randomToken, sha256Text } from "./utils";
+import { ProxyAcceptanceRunner } from "./ProxyAcceptance";
 
 interface LoadedImages {
   attacker: ArrayBuffer;
@@ -788,6 +789,81 @@ export class LabController {
     } finally {
       await restoreInterceptMode();
       if (generation === this.generation) this.patch({ operation: null });
+    }
+  };
+
+  runRealProxyAcceptance = async (): Promise<void> => {
+    if (this.state.operation || !this.runtime.attacker || !this.runtime.target || !["ready", "testing", "completed"].includes(this.state.status)) return;
+    const generation = this.generation;
+    let pausedTarget: MachineRuntime | null = null;
+    if (this.telemetryTimer) {
+      clearInterval(this.telemetryTimer);
+      this.telemetryTimer = null;
+    }
+    this.patch({ operation: "Starting real proxy acceptance", status: "testing", error: null, proxyAcceptance: null });
+    const pauseTarget = async () => {
+      if (generation !== this.generation) throw new Error("Proxy acceptance was cancelled");
+      const runtime = this.runtime.target;
+      if (!runtime) throw new Error("Target guest is not running");
+      await runtime.emulator.stop();
+      if (runtime.emulator.is_running()) throw new Error("Target v86 did not stop for the bounded unavailable-target test");
+      pausedTarget = runtime;
+    };
+    const resumeTarget = async () => {
+      if (!pausedTarget) return;
+      const runtime = pausedTarget;
+      if (generation !== this.generation || this.runtime.target !== runtime) {
+        pausedTarget = null;
+        return;
+      }
+      await runtime.emulator.run();
+      if (!runtime.emulator.is_running()) throw new Error("Target v86 did not resume after the unavailable-target test");
+      pausedTarget = null;
+    };
+    try {
+      const runner = new ProxyAcceptanceRunner({
+        execute: (machine, command, timeout) => this.requireSerial(machine).exec(command, timeout),
+        pauseTarget,
+        resumeTarget,
+        onProgress: (proxyAcceptance) => {
+          if (generation !== this.generation) return;
+          const current = proxyAcceptance.gates.find((gate) => gate.status === "RUNNING");
+          this.patch({ proxyAcceptance, operation: current ? `Proxy acceptance: ${current.label}` : "Finishing proxy acceptance" });
+        },
+        capture: (name, machine, data) => {
+          if (generation !== this.generation) return;
+          this.evidence(machine, "proxy", `Proxy acceptance ${name}`, `${machine} guest / real proxy acceptance`, data);
+        },
+      });
+      const report = await runner.run();
+      if (generation !== this.generation) return;
+      const passed = report.status === "PASS";
+      this.patch({
+        proxyAcceptance: report,
+        status: this.state.completedAs ? "completed" : "ready",
+        hasUnsavedProgress: true,
+        proxyStatus: report.gates.find((gate) => gate.id === "process")?.status === "PASS" ? "running" : this.state.proxyStatus,
+        notice: passed
+          ? "Real Dillo interception/editing/forwarding, Repeater, target-log corroboration, and bounded failure recovery all passed."
+          : "Real proxy acceptance failed. Inspect the individual gate and guest artifacts; no proxy capability is inferred from readiness alone.",
+        error: passed ? null : report.error,
+      });
+      this.log(passed ? "Real browser proxy and Repeater acceptance passed with target-side corroboration." : "Real proxy acceptance failed; see its per-gate report.", passed ? "success" : "error");
+      await this.persistReport();
+    } catch (error) {
+      if (generation === this.generation) {
+        this.patch({ status: this.state.completedAs ? "completed" : "ready", error: error instanceof Error ? error.message : String(error) });
+      }
+    } finally {
+      if (pausedTarget && generation === this.generation) {
+        try { await resumeTarget(); } catch (error) {
+          this.log(`Target resume after proxy acceptance needs attention: ${error instanceof Error ? error.message : String(error)}`, "warning");
+        }
+      }
+      if (generation === this.generation) {
+        this.patch({ operation: null });
+        this.startTelemetryTimer();
+      }
     }
   };
 

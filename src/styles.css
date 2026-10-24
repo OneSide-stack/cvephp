@@ -193,6 +193,18 @@ p { color: var(--muted); line-height: 1.65; }
 .app-launcher-list strong { font-size: 12px; font-weight: 600; }
 .app-launcher-list small { color: var(--faint); font-size: 10px; }
 .app-launcher-list > button > svg { color: var(--faint); }
+.proxy-acceptance-status { margin-bottom: 10px; font: 700 12px var(--mono); letter-spacing: .08em; }
+.proxy-acceptance-status.pass { color: var(--green); }
+.proxy-acceptance-status.fail { color: var(--red); }
+.proxy-acceptance-status.running { color: var(--amber); }
+.proxy-acceptance-gates { display: flex; flex-direction: column; gap: 8px; }
+.proxy-gate { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border-soft); }
+.proxy-gate strong { font-size: 10px; }
+.proxy-gate > span { color: var(--faint); font: 9px var(--mono); }
+.proxy-gate.pass > span { color: var(--green); }
+.proxy-gate.fail > span { color: var(--red); }
+.proxy-gate.running > span { color: var(--amber); }
+.proxy-gate small { grid-column: 1 / -1; color: var(--muted); font-size: 9px; line-height: 1.5; overflow-wrap: anywhere; }
 .app-icon { flex: 0 0 auto; width: 35px; height: 35px; display: inline-grid; place-items: center; border-radius: 6px; }
 .app-icon.teal { color: var(--teal); background: #173a34; }
 .app-icon.amber { color: var(--amber); background: #382c1e; }

@@ -162,6 +162,28 @@ export interface SnapshotMeta {
   v86Version: string;
 }
 
+export type ProxyAcceptanceGateId = "process" | "browser-routing" | "interception" | "editing" | "target-log" | "disabled" | "repeater" | "errors";
+export type ProxyAcceptanceGateStatus = "PENDING" | "RUNNING" | "PASS" | "FAIL" | "BLOCKED";
+
+export interface ProxyAcceptanceGate {
+  id: ProxyAcceptanceGateId;
+  label: string;
+  status: ProxyAcceptanceGateStatus;
+  detail: string;
+}
+
+export interface ProxyAcceptanceReport {
+  schema: 1;
+  runId: string;
+  startedAt: string;
+  finishedAt: string | null;
+  status: "RUNNING" | "PASS" | "FAIL";
+  gates: ProxyAcceptanceGate[];
+  markers: Record<string, string>;
+  artifacts: Record<string, string>;
+  error: string | null;
+}
+
 export interface LabState {
   view: ViewId;
   status: LabStatus;
@@ -187,6 +209,7 @@ export interface LabState {
   activeSerialMachine: MachineId;
   attackerTools: string[];
   proxyStatus: "unknown" | "running" | "failed";
+  proxyAcceptance: ProxyAcceptanceReport | null;
 }
 
 export const STATUS_LABELS: Record<LabStatus, string> = {

@@ -39,4 +39,5 @@ export const initialState: LabState = {
   activeSerialMachine: "attacker",
   attackerTools: [],
   proxyStatus: "unknown",
+  proxyAcceptance: null,
 };

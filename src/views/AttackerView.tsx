@@ -39,7 +39,16 @@ export function AttackerView() {
             </div>
             <button className="button secondary full-width" onClick={() => void controller.runBaseline()} disabled={!ready || Boolean(state.operation)}><ScanLine size={15} />Run guest baseline request</button>
             <button className="button secondary full-width" onClick={() => void controller.runProxyBaseline()} disabled={!ready || state.proxyStatus !== "running" || Boolean(state.operation)} title="Guest curl through RangeProxy, with target log corroboration"><Waypoints size={15} />Run guest proxy request</button>
+            <button className="button secondary full-width" onClick={() => void controller.runRealProxyAcceptance()} disabled={!ready || state.proxyStatus !== "running" || Boolean(state.operation)} title="Real Dillo interception, editing, Repeater, target logs, and bounded recovery checks"><ScanLine size={15} />Run real proxy acceptance</button>
           </Panel>
+
+          {state.proxyAcceptance && <Panel eyebrow="REAL GUEST ACCEPTANCE" title="Proxy verification" className="proxy-acceptance-panel">
+            <div id="proxy-acceptance-status" className={`proxy-acceptance-status ${state.proxyAcceptance.status.toLowerCase()}`}>{state.proxyAcceptance.status}</div>
+            <div className="proxy-acceptance-gates">{state.proxyAcceptance.gates.map((gate) => <div id={`proxy-gate-${gate.id}`} className={`proxy-gate ${gate.status.toLowerCase()}`} key={gate.id}>
+              <strong>{gate.label}</strong><span>{gate.status}</span><small>{gate.detail}</small>
+            </div>)}</div>
+            <pre id="proxy-acceptance-json" hidden>{JSON.stringify(state.proxyAcceptance)}</pre>
+          </Panel>}
 
           <Panel eyebrow="VERIFIED IN-GUEST" title="Binary inventory" action={<Wrench size={16} />}>
             {state.attackerTools.length ? <div className="tool-tags">{state.attackerTools.map((tool) => <span key={tool}><Check size={11} />{tool}</span>)}</div> : <p className="muted">Waiting for the guest's command -v inventory…</p>}
