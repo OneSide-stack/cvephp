@@ -41,15 +41,27 @@ COPY php2shell.ini    /usr/local/etc/php/conf.d/90-php2shell.ini
 # ── application bundle: the complete UI (HTML + CSS + JS + PHP API) ships
 #    as a single functional index.php in /var/www/html ──────────────────────
 COPY --chown=www-data:www-data index.php /var/www/html/index.php
-# Walkthrough for beginner-friendly Solution tab (rendered inside the app)
-# This file is bundled so the Solution → Walkthrough tab can render it live.
+
+# ── lab-only impact chain runner (SIMULATION — read the file header) ───────
+# Models the lifetime violation each advisory describes so the guided room can
+# run recon -> bailout -> stale reuse -> code execution -> flag. It is not a
+# weaponised exploit and it refuses to run on a patched engine.
+COPY --chown=www-data:www-data lab-exploit.php /var/www/html/lab-exploit.php
+# Full guided room, bundled into the image for reference from inside the
+# container (the in-app Solution tab is rendered from index.php).
 # Build from inside php2shell-lab/: `docker build -t php2shell-lab:8.4.26 .`
 # (the build context is this folder, so WALKTHROUGH.md must be present here).
 COPY WALKTHROUGH.md /var/www/html/WALKTHROUGH.md
 
-# runtime dirs, permissions, log destinations
-RUN mkdir -p /var/log/supervisor /var/log/nginx /var/lib/nginx/tmp /run \
-    && chown -R www-data:www-data /var/www/html
+# runtime dirs, permissions, log destinations, lab flags + simulator switch
+#   /var/www/html/.lab-flag-*  → readable only by code execution (nginx denies dotfiles)
+#   /opt/php2shell/...         → presence of the marker enables the chain runner
+RUN mkdir -p /var/log/supervisor /var/log/nginx /var/lib/nginx/tmp /run /opt/php2shell /tmp/php2shell \
+    && printf 'PHP2SHELL{109618-oom-bailout-reused-worker-memory}\n' > /var/www/html/.lab-flag-109618 \
+    && printf 'PHP2SHELL{109619-stale-worker-global-after-fatal}\n'  > /var/www/html/.lab-flag-109619 \
+    && : > /opt/php2shell/impact-sim.enabled \
+    && chown -R www-data:www-data /var/www/html /tmp/php2shell \
+    && chmod 0755 /opt/php2shell && chmod 0644 /opt/php2shell/impact-sim.enabled
 
 # the lab's only published port: the nginx front door
 EXPOSE 80

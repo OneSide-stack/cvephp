@@ -39,7 +39,26 @@ expected output, hidden answers, a full answer key, an evidence-collection
 workflow and the report you should be able to write at the end. Start there if
 you want a step-by-step solution rather than open-ended analysis.
 
-**Simple walkthrough:** the **Solution** page in the app is a short, plain-English, 7-step walkthrough with copy buttons and checkboxes. Open it at `http://127.0.0.1:8080/?view=lab` once the lab is running. The full detailed guide is still `WALKTHROUGH.md` in the repo.
+**Simple walkthrough:** the **Solution** page in the app is a plain-English,
+16-step walkthrough with copy buttons and checkboxes — including both attack
+chains, which end in a flag. Open it at `http://127.0.0.1/?view=lab` once the lab
+is running. The full detailed guide is still `WALKTHROUGH.md` in the repo.
+
+**Complete a chain (ends in real access):**
+
+```bash
+# target on port 80
+python3 cve-demonstrations/run_chain.py --chain both
+# → ACCESS CONFIRMED, uid=82(www-data), PHP2SHELL{109618-…} and PHP2SHELL{109619-…}
+
+# patched control on 8081 — the same chains are refused
+python3 cve-demonstrations/run_chain.py --chain both --base http://127.0.0.1:8081
+```
+
+The runner models the lifetime violation each advisory describes (a per-worker
+file stands in for the worker heap; the OOM fatal is real). It is not a
+weaponised exploit and it proves nothing about a vendor build. Disable it with
+`docker exec php2shell-vm rm /opt/php2shell/impact-sim.enabled`.
 
 ---
 
@@ -52,6 +71,7 @@ you want a step-by-step solution rather than open-ended analysis.
 | `supervisord.conf` | Process manager: php-fpm (priority 5) + nginx (priority 10), logs to container stdout/stderr |
 | `php2shell.ini` | Explicit PHP runtime posture (errors on, generous limits, UTC) |
 | `index.php` | The complete Nimbus Analytics dashboard UI + JSON API, single file |
+| `lab-exploit.php` | **Lab-only impact chain runner** — recon → arm/producer → bailout → same-worker reuse → command as `www-data` → flag. Simulates the documented impact; refuses to run on a patched engine |
 | `.dockerignore` | Keeps the build context minimal |
 
 ## Architecture
@@ -65,6 +85,7 @@ you want a step-by-step solution rather than open-ended analysis.
                     │    │                             └─ PHP 8.4.26 (CVE-2026-109618/-619)
                     │    └── /healthz (nginx-served liveness)                          │
                     │  supervisord = PID 1  (docker logs -f php2shell-vm)              │
+                    │  /lab-exploit.php  (lab-only impact chain runner)                │
                     └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -82,17 +103,18 @@ cd php2shell-lab
 docker build -t php2shell-lab:8.4.26 .
 
 # 2. run the "VM" — port 80 exposed to the host
-docker run -d --name php2shell-vm -p 80:80 php2shell-lab:8.4.26
+docker run -d --name php2shell-vm -p 127.0.0.1:80:80 php2shell-lab:8.4.26
 
 # 3. open the app
 open http://localhost/        # macOS
 xdg-open http://localhost/    # Linux
 ```
 
-Port 80 already taken? Publish it elsewhere:
+Port 80 already taken? Publish it on loopback at a different host port
+(the room's canonical URL is port 80, so prefer freeing it):
 
 ```bash
-docker run -d --name php2shell-vm -p 8080:80 php2shell-lab:8.4.26
+docker run -d --name php2shell-vm -p 127.0.0.1:8080:80 php2shell-lab:8.4.26
 ```
 
 ## Verify the environment
@@ -137,7 +159,7 @@ docker run -d --name php2shell-vm-debug \
 
 # keep exploit payloads/mounters outside the image
 docker cp ./payload.php php2shell-vm:/tmp/
-docker run -d --name php2shell-vm -p 80:80 -v "$PWD/payloads:/payloads:ro" php2shell-lab:8.4.26
+docker run -d --name php2shell-vm -p 127.0.0.1:80:80 -v "$PWD/payloads:/payloads:ro" php2shell-lab:8.4.26
 
 # watch the access log (it records upstream response times)
 docker exec php2shell-vm tail -f /var/log/nginx/access.log
@@ -154,6 +176,10 @@ Useful surfaces inside the app:
 * `GET /index.php?api=ping&showpid=1` — same, plus the FPM worker `pid` (opt-in;
   used for same-worker / recycling exercises in the walkthrough)
 * `GET /healthz` — nginx-level liveness (no PHP involved)
+* `GET /lab-exploit.php` — **lab-only** impact chain runner (see its header; it
+  refuses to run on a patched engine and is gated by
+  `/opt/php2shell/impact-sim.enabled`)
+* `GET /lab-exploit.php?chain=109618&stage=recon` — chain precondition check (JSON)
 * *Runtime Environment* view — live `ini_get()` posture, extensions, uptime
 
 ## Rebuilding the CSS (UI development only)
@@ -178,7 +204,8 @@ npx tailwindcss -c tailwind.config.js -i input.css -o app.css --minify
 * **`manifest unknown` / tag not found for `php:8.4.26-fpm-alpine`** — pin any
   other pre-patch build via the build arg, e.g.
   `docker build --build-arg PHP_IMAGE=php:8.3.35-fpm-alpine -t php2shell-lab:8.3 .`
-* **Port 80 busy on the host** — use `-p 8080:80`.
+* **Port 80 busy on the host** — free it, or fall back to
+  `-p 127.0.0.1:8080:80` and use `http://127.0.0.1:8080` everywhere.
 * **Container exits immediately** — check `docker logs php2shell-vm`; the image
   expects `/etc/supervisor/conf.d/supervisord.conf` (bundled) and starts
   `/usr/bin/supervisord -c ...` as the command.
