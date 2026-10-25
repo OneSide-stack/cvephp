@@ -1,0 +1,7 @@
+# keep the build context minimal — only what the image needs
+.git
+.gitignore
+.build
+node_modules
+README.md
+*.log
