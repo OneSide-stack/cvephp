@@ -71,6 +71,11 @@ you want a step-by-step solution rather than open-ended analysis.
 ## Build & run
 
 ```bash
+# 0. setup: check that Docker is installed and running
+docker --version        # should print e.g. Docker version 24.0.5
+docker info >/dev/null && echo "Docker is running"
+# not installed? Get Docker Desktop (Windows/macOS) or Docker Engine (Linux) from https://docs.docker.com/get-docker/
+
 cd php2shell-lab
 
 # 1. build the image
