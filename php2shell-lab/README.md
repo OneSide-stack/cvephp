@@ -9,8 +9,10 @@ dashboard) for analysing and testing the **PHP2Shell** vulnerabilities:
 | CVE-2026-109618 | RCE via out-of-memory corruption (`longjmp` leaves request memory uninitialized) | 9.2 | PHP 8.4.27 / 8.5.12 / 8.3.36 / 8.2.35 |
 | CVE-2026-109619 | RCE via stale global state (freed request memory reused by later requests on the same worker) | 9.2 | PHP 8.4.27 / 8.5.12 / 8.3.36 / 8.2.35 |
 
-Both flaws live in the **PHP engine itself** (not in application code), affect the
-**PHP-FPM SAPI**, and are pre-auth — so the target here is the runtime:
+Both flaws live in the **PHP engine itself** (not in application code), affect
+**all web-serving SAPIs** (PHP-FPM, Apache `mod_php`, php-cgi, FrankenPHP,
+LSAPI — PHP rates `mod_php` highest risk), and are pre-auth — so the target here
+is the runtime:
 
 * **Base image:** `php:8.4.26-fpm-alpine` — the last 8.4 release *before* the
   PHP2Shell patches.
@@ -20,9 +22,25 @@ Both flaws live in the **PHP engine itself** (not in application code), affect t
   entire UI — Tailwind (compiled & embedded), charts, dark/light mode, live
   telemetry API. No CDN or external assets; works fully air-gapped.
 
-> ⚠️ **Safety:** this image ships a known-vulnerable, internet-exploited PHP
-> runtime. Run it only on an isolated machine/network you control. Never expose
-> it publicly.
+> ⚠️ **Safety:** this image ships a known-vulnerable PHP runtime. Run it only on
+> an isolated machine/network you control (loopback-published port). Never expose
+> it publicly. Advisory facts in the table above were re-checked on 2026-10-25
+> against the [PHP.net advisory](https://www.php.net/archive/2026.php#2026-10-21-5)
+> and both [php-src GHSAs](https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w)
+> ([109619](https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp));
+> re-verify before every engagement, and check vendor backports — a version
+> number alone never proves patch status.
+
+### Learning path
+
+The **Solution** view in the app has five tabs: *Overview* (walkthrough),
+*CVE-2026-109618*, *CVE-2026-109619*, *Verify & Patch Test*, and
+**Real-World Hunt — Tester Guide**. The last one is a ten-step, no-exploit field
+workflow for finding these CVEs on infrastructure you are authorized to test:
+ground truth → asset inventory → fingerprint → patch/backport status → attack
+requirements → safe lab reproduction → evidence ladder → log hunting → report →
+retest. Full standalone version with exercises and a report template:
+[`cve-demonstrations/REAL-WORLD-TESTER-GUIDE.md`](../cve-demonstrations/REAL-WORLD-TESTER-GUIDE.md).
 
 ---
 
