@@ -19,9 +19,8 @@ Security-research workspace for the **PHP2Shell** vulnerabilities
   **both** CVEs: how each claim would be validated, what triggers/diagnostics
   count as evidence, a safe loopback baseline collector (`collect_runtime.py`),
   and the [real-world tester guide](./cve-demonstrations/REAL-WORLD-TESTER-GUIDE.md).
-* **Solution → Real-World Hunt** in the lab UI — the same step-by-step field
-  workflow (inventory → fingerprint → backport check → attack requirements →
-  evidence ladder → report → retest) inside the app.
+* **Solution** page in the lab UI — a short, simple 7-step walkthrough with
+  copy buttons and checkboxes.
 
 See [`php2shell-lab/README.md`](./php2shell-lab/README.md) for the exact
 build/run/verify commands and [`cve-demonstrations/README.md`](./cve-demonstrations/README.md)

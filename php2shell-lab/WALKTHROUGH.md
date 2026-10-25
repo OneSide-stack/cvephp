@@ -118,12 +118,12 @@ Your browser
 ### How to use this guide as a beginner
 
 1. **Open a terminal** (Mac: `Terminal` app, Windows: WSL or Git Bash, Linux: Ctrl+Alt+T).
-2. **Copy-paste commands exactly** — every code block is tested. Click the copy button in the website’s Solution tab.
+2. **Copy-paste commands exactly** — every code block is tested.
 3. **Compare your output** to the “Expected” blocks. Small differences (timestamps, PIDs) are OK; the shape must match.
 4. **Don’t skip checkpoints** ✅ — they tell you “you’re good to continue”.
 5. **If stuck:** jump to [Troubleshooting](#6-troubleshooting), or rebuild the container and retry from Task 1. It’s disposable.
 6. **Take notes:** write your answers in a notebook or `notes.txt` before peeking at the hidden Answers. That’s how you learn.
-7. **In the website:** go to **Solution → Walkthrough (Beginner Guide)** tab — it’s the same guide but interactive with progress bars and copy buttons.
+7. **In the website:** the **Solution** page has a short, simple step-by-step version of this room with copy buttons.
 
 ### Your first 3 commands (try them now!)
 
@@ -175,7 +175,7 @@ Task 12 🧹  Clean up ──► remove vulnerable image
          └─► You win! You can now do this on real infrastructure (with permission).
 ```
 
-> **Tip for beginners:** The website’s **Solution → Walkthrough** tab turns this file into an interactive checklist with progress bar, copy buttons, expected output previews, and “I did this” checkboxes that save in your browser. Open it at `http://127.0.0.1:8080/?view=lab&tab=walkthrough` once the lab is running. Everything below is also there, but nicely formatted.
+> **Tip for beginners:** The website’s **Solution** page has a short version of this room with copy buttons and “I did this” checkboxes. Open it at `http://127.0.0.1:8080/?view=lab` once the lab is running.
 
 ---
 
@@ -293,13 +293,9 @@ Expected ping (the `time` value changes):
 
 ### 2.4 Open the in-app guide
 
-The dashboard ships a five-tab **Solution** view. Deep links work:
+The dashboard has a **Solution** page with a simple step-by-step walkthrough. Open it at:
 
-- <http://127.0.0.1:8080/?view=lab> — Overview
-- <http://127.0.0.1:8080/?view=lab&tab=cve618> — CVE-2026-109618
-- <http://127.0.0.1:8080/?view=lab&tab=cve619> — CVE-2026-109619
-- <http://127.0.0.1:8080/?view=lab&tab=verify> — Verify & Patch Test
-- <http://127.0.0.1:8080/?view=lab&tab=field> — Real-World Hunt (10-step method)
+- <http://127.0.0.1:8080/?view=lab>
 - <http://127.0.0.1:8080/?view=runtime> — live `ini_get()` posture
 
 ### 2.5 Create an evidence directory
