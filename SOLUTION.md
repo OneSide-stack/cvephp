@@ -11,8 +11,7 @@ data if you "just try a PoC" on production.
 | What | Where |
 |---|---|
 | **Guided room / walkthrough** (tasks, answers, report) | [`WALKTHROUGH.md`](WALKTHROUGH.md) |
-| In-app **Solution** view (5 tabs) | `php2shell-lab/index.php` → sidebar *Solution* |
-| **Real-World Hunt — Tester Guide** tab | *Solution → Real-World Hunt* (new) |
+| In-app **Solution** page (simple 7-step walkthrough) | `php2shell-lab/index.php` → sidebar *Solution* |
 | Full standalone step-by-step guide | [`cve-demonstrations/REAL-WORLD-TESTER-GUIDE.md`](cve-demonstrations/REAL-WORLD-TESTER-GUIDE.md) |
 | Per-CVE evidence workbooks | [`CVE-2026-109618.md`](cve-demonstrations/CVE-2026-109618.md) · [`CVE-2026-109619.md`](cve-demonstrations/CVE-2026-109619.md) |
 | Investigation instructions + baseline collector | [`cve-demonstrations/README.md`](cve-demonstrations/README.md) · [`collect_runtime.py`](cve-demonstrations/collect_runtime.py) |
