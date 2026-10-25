@@ -329,13 +329,19 @@ if ($api !== null) {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
     if ($api === 'ping') {
-        echo json_encode([
+        $ping = [
             'status'  => 'ok',
             'service' => 'nimbus-analytics',
             'php'     => PHP_VERSION,
             'sapi'    => PHP_SAPI,
             'time'    => gmdate('c'),
-        ]);
+        ];
+        // Opt-in worker PID for the cross-request (same-worker) exercise.
+        // Not exposed by default: the lab starts as a realistic fingerprint surface.
+        if (isset($_GET['showpid'])) {
+            $ping['pid'] = getmypid();
+        }
+        echo json_encode($ping);
     } elseif ($api === 'stats') {
         echo json_encode(stats_payload(), JSON_UNESCAPED_SLASHES);
     } else {
@@ -1370,7 +1376,7 @@ supervisord = PID 1   docker logs -f php2shell-vm</pre>
             <ol class="mt-2 list-decimal space-y-1.5 pl-5 text-xs leading-relaxed text-rose-900/80 dark:text-rose-200/80">
               <li>Read <code class="font-mono">cve-demonstrations/CVE-2026-109619.md</code>. Identify the affected global and its init/shutdown paths in the verified patch.</li>
               <li>Build a diagnostic image and pin <strong>one FPM worker</strong>: <code class="font-mono">pm=static, pm.max_children=1, pm.max_requests=0</code>. Stop dashboard polling (it steals the worker) while you test.</li>
-              <li>Instrument your app / access log to emit worker PID per request — the bundled <code class="font-mono">?api=ping</code> does not expose it; you need to add <code class="font-mono">getmypid()</code> for this test.</li>
+              <li>Record the worker PID per request — the bundled <code class="font-mono">?api=ping&amp;showpid=1</code> returns it as <code class="font-mono">pid</code> (opt-in, added for this exercise). You can also add <code class="font-mono">getmypid()</code> to your own instrumentation.</li>
               <li>Send vendor’s request A (put freed object into the global) then request B (trigger dereference). Confirm both hit the <em>same PID</em>. Capture the lifetime-violation trace; repeat with a fresh worker as control.</li>
               <li>Persisting session data, caches, or matching response text alone are <strong>not</strong> proof of stale freed memory.</li>
               <li>Repeat identical pair against the patched image — violation must be gone.</li>
@@ -1380,7 +1386,7 @@ supervisord = PID 1   docker logs -f php2shell-vm</pre>
             <p class="text-slate-400"># Pin worker + observe PIDs (adjust pool conf in your diagnostic Dockerfile)</p>
             <p>curl -s 'http://127.0.0.1:8080/index.php?api=ping&showpid=1'</p>
             <p>docker exec php2shell-vm tail -f /var/log/nginx/access.log   # rt + urt</p>
-            <p>docker exec php2shell-vm ps -o pid,cmd                      # fpm children</p>
+            <p>docker exec php2shell-vm ps -ef | grep '[p]hp-fpm'          # fpm children</p>
           </div>
           <p class="mt-2 text-[11px] text-slate-400">Do not use real credentials as markers — use synthetic canaries. A memory disclosure alone does not equal RCE.</p>
         </div>
@@ -1521,7 +1527,7 @@ supervisord = PID 1   docker logs -f php2shell-vm</pre>
                 <tr><td class="py-1.5 font-mono">8.1 / 8.0 / 7.4</td><td class="py-1.5">No upstream binary fix — verify source/LTS backport</td></tr>
                 <tr><td class="py-1.5">≥ fixed milestone</td><td class="py-1.5">Patched — still verify workers were restarted</td></tr>
               </tbody></table></div>
-              <p class="mt-2 text-[11px] text-slate-500 dark:text-slate-400"><strong>Restart matters:</strong> a patched package with old FPM workers still running is an unpatched process. Check with <code class="font-mono">ps -o pid,lstart,cmd -C php-fpm</code>.</p>
+              <p class="mt-2 text-[11px] text-slate-500 dark:text-slate-400"><strong>Restart matters:</strong> a patched package with old FPM workers still running is an unpatched process. Check with <code class="font-mono">ps -ef | grep '[p]hp-fpm'</code> (or <code class="font-mono">supervisorctl status</code>).</p>
             </div></li>
             <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500 text-xs font-bold text-white">5</span><div class="min-w-0 flex-1">
               <p class="font-bold text-slate-900 dark:text-white">Check the attack requirements — the <code class="font-mono">AT:P</code> in the CVSS vector.</p>
@@ -1735,7 +1741,7 @@ window.__BOOT__ = <?= json_encode($boot, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) 
     var t = TITLES[view] || ['—', ''];
     $('#pageTitle').textContent = t[0];
     $('#pageCrumb').textContent = t[1];
-    if (view === 'analytics' && charts.sessions) { charts.sessions.resize(); }
+    if (view === 'analytics' && charts && charts.sessions) { charts.sessions.resize(); }
   }
   $$('.nav-link').forEach(function (a) {
     a.addEventListener('click', function (ev) {
@@ -1771,6 +1777,13 @@ window.__BOOT__ = <?= json_encode($boot, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) 
     var qs = new URLSearchParams(window.location.search);
     var initial = qs.get('tab') || 'overview';
     if (qs.get('view') === 'lab') { show('lab'); activate(['overview','cve618','cve619','verify','field'].indexOf(initial) !== -1 ? initial : 'overview'); }
+  })();
+
+  /* ── deep links for the other views: ?view=runtime etc. ── */
+  (function () {
+    var requested = new URLSearchParams(window.location.search).get('view');
+    if (!requested || requested === 'lab' || !TITLES[requested]) return;
+    show(requested === 'logs' ? 'dashboard' : requested);
   })();
 
   /* ── canvas chart engine ───────────────────────────────── */

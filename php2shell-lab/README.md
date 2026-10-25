@@ -33,6 +33,12 @@ is the runtime:
 
 ### Learning path
 
+**Guided room:** [`WALKTHROUGH.md`](../WALKTHROUGH.md) turns this lab into a
+TryHackMe/Hack The Box-style exercise: 12 tasks with hints, every command,
+expected output, hidden answers, a full answer key, an evidence-collection
+workflow and the report you should be able to write at the end. Start there if
+you want a step-by-step solution rather than open-ended analysis.
+
 The **Solution** view in the app has five tabs: *Overview* (walkthrough),
 *CVE-2026-109618*, *CVE-2026-109619*, *Verify & Patch Test*, and
 **Real-World Hunt — Tester Guide**. The last one is a ten-step, no-exploit field
@@ -147,6 +153,8 @@ Useful surfaces inside the app:
 * `GET /` — the dashboard (server-rendered metrics, charts, logs)
 * `GET /index.php?api=stats` — live telemetry JSON (poll drives the charts/logs)
 * `GET /index.php?api=ping` — engine fingerprint (`php`, `sapi`)
+* `GET /index.php?api=ping&showpid=1` — same, plus the FPM worker `pid` (opt-in;
+  used for same-worker / recycling exercises in the walkthrough)
 * `GET /healthz` — nginx-level liveness (no PHP involved)
 * *Runtime Environment* view — live `ini_get()` posture, extensions, uptime
 

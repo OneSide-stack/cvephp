@@ -1,0 +1,6 @@
+# Local evidence captured while working through the lab.
+# It can contain host-specific configuration and image digests — keep it out of Git.
+evidence/
+baseline*.json
+baseline*.log
+*.local.json
