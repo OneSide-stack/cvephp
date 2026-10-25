@@ -1278,6 +1278,34 @@ $boot = [
         </ul>
       </div>
 
+      <!-- the two bugs in plain words -->
+      <div class="sol-card">
+        <p class="sol-h">The two bugs in plain words</p>
+        <p class="sol-text">Both bugs are inside PHP itself, not in the dashboard. Both are fixed in the same new versions.</p>
+
+        <div style="margin-top:16px;border-top:1px solid #e2e8f0;padding-top:14px">
+          <p class="sol-h">Bug 1: CVE-2026-109618 (memory bug)</p>
+          <ul class="sol-list">
+            <li><strong>What it is:</strong> PHP runs out of memory while handling a request, and then reads memory that is no longer safe to use.</li>
+            <li><strong>Why it matters:</strong> an attacker could use this to take control of the server.</li>
+            <li><strong>Setting to look at:</strong> <code>memory_limit</code>. A small limit like 256M makes running out of memory easier.</li>
+            <li><strong>Fixed in:</strong> PHP 8.4.27 (and 8.5.12, 8.3.36, 8.2.35).</li>
+          </ul>
+        </div>
+
+        <div style="margin-top:16px;border-top:1px solid #e2e8f0;padding-top:14px">
+          <p class="sol-h">Bug 2: CVE-2026-109619 (leftover data bug)</p>
+          <ul class="sol-list">
+            <li><strong>What it is:</strong> PHP keeps a pointer to memory it has already freed. A later request on the same worker can then use that old pointer.</li>
+            <li><strong>Why it matters:</strong> the same attack risk as bug 1.</li>
+            <li><strong>Setting to look at:</strong> <code>session.upload_progress.enabled</code>. When it is <code>On</code>, this bug's path is open.</li>
+            <li><strong>Fixed in:</strong> the same versions as bug 1.</li>
+          </ul>
+        </div>
+
+        <p class="sol-text" style="margin-top:14px"><strong>Simple rule:</strong> if your PHP version is older than the fixed version, the server is at risk from both bugs until you update.</p>
+      </div>
+
       <!-- step 1 -->
       <div class="sol-card" data-step>
         <div class="sol-step">
@@ -1312,7 +1340,7 @@ docker run -d --name php2shell-vm --memory=256m --cpus=1 -p 127.0.0.1:8080:80 ph
         <div class="sol-step">
           <div class="sol-num">3</div>
           <div class="sol-body">
-            <p class="sol-h">Compare it with the fixed versions</p>
+            <p class="sol-h">Compare it with the fixed versions (this checks both bugs)</p>
             <p class="sol-text">The bugs are fixed in these versions (or any newer one):</p>
             <ul class="sol-list">
               <li>PHP 8.4.27</li>
@@ -1331,12 +1359,12 @@ docker run -d --name php2shell-vm --memory=256m --cpus=1 -p 127.0.0.1:8080:80 ph
         <div class="sol-step">
           <div class="sol-num">4</div>
           <div class="sol-body">
-            <p class="sol-h">Check the two settings that make the bugs easier to hit</p>
+            <p class="sol-h">Check the settings behind each bug</p>
             <p class="sol-text">Run this command to see the settings:</p>
             <div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker exec php2shell-vm php -i | grep -E "^(memory_limit|session.upload_progress.enabled)"</div>
             <ul class="sol-list">
-              <li><code>memory_limit = 256M</code>: each page gets a fixed amount of memory. One of the bugs is about running out of memory.</li>
-              <li><code>session.upload_progress.enabled = On</code>: a feature that the second bug depends on. Being <code>On</code> means it is switched on.</li>
+              <li><strong>Bug 1:</strong> <code>memory_limit = 256M</code>. Each page gets a fixed amount of memory, and bug 1 is about running out of it.</li>
+              <li><strong>Bug 2:</strong> <code>session.upload_progress.enabled = On</code>. This is the feature bug 2 depends on. <code>On</code> means it is switched on.</li>
             </ul>
             <label class="sol-done"><input type="checkbox" data-step-check="4"> I did this step</label>
           </div>
