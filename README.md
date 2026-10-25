@@ -9,6 +9,10 @@ Security-research workspace for the **PHP2Shell** vulnerabilities
   vulnerable Docker environment replicating a corporate web deployment
   (nginx + PHP-FPM **8.4.26** under Supervisor, with a realistic Tailwind
   analytics dashboard as the app) for analysing and testing the flaws.
+* [`WALKTHROUGH.md`](./WALKTHROUGH.md) — **start here for hands-on practice**: a
+  TryHackMe/Hack The Box-style guided room (setup → recon → fingerprint → patch
+  triage → attack requirements → evidence → report → retest) with 12 tasks,
+  expected output, hidden answers, a full answer key and a completion checklist.
 * [`SOLUTION.md`](./SOLUTION.md) — entry point: the lab answer plus the ten-step
   real-world tester loop, with links to every workbook.
 * [`cve-demonstrations/`](./cve-demonstrations/) — single folder covering

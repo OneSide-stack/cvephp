@@ -10,6 +10,7 @@ data if you "just try a PoC" on production.
 
 | What | Where |
 |---|---|
+| **Guided room / walkthrough** (tasks, answers, report) | [`WALKTHROUGH.md`](WALKTHROUGH.md) |
 | In-app **Solution** view (5 tabs) | `php2shell-lab/index.php` → sidebar *Solution* |
 | **Real-World Hunt — Tester Guide** tab | *Solution → Real-World Hunt* (new) |
 | Full standalone step-by-step guide | [`cve-demonstrations/REAL-WORLD-TESTER-GUIDE.md`](cve-demonstrations/REAL-WORLD-TESTER-GUIDE.md) |
