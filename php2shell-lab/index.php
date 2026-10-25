@@ -1266,7 +1266,7 @@ $boot = [
         <p class="sol-text" style="font-size:16px;color:#0f172a;font-weight:600;margin-top:10px">Is this PHP version safe, or does it need an update?</p>
         <p class="sol-text">You will <strong>not</strong> attack anything. Just check the version and the settings, then write down your answer.</p>
         <div class="sol-bar" aria-hidden="true"><div id="sol-bar-fill"></div></div>
-        <p class="sol-text" style="font-size:13px"><span id="sol-count">0</span> of 7 steps done <span style="opacity:.7">(saved in this browser)</span></p>
+        <p class="sol-text" style="font-size:13px"><span id="sol-count">0</span> of 11 steps done <span style="opacity:.7">(saved in this browser)</span></p>
       </div>
 
       <div class="sol-card sol-warn">
@@ -1306,109 +1306,140 @@ $boot = [
         <p class="sol-text" style="margin-top:14px"><strong>Simple rule:</strong> if your PHP version is older than the fixed version, the server is at risk from both bugs until you update.</p>
       </div>
 
-      <!-- step 1 -->
+      <p class="sol-title" style="font-size:16px;margin:18px 4px 0">Part 1: Get the lab running</p>
+
       <div class="sol-card" data-step>
         <div class="sol-step">
           <div class="sol-num">1</div>
           <div class="sol-body">
-            <p class="sol-h">Start the lab</p>
-            <p class="sol-text">Copy both lines and run them. The first builds the lab, the second starts it.</p>
-            <div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker build -f php2shell-lab/Dockerfile --build-arg PHP_IMAGE=php:8.4.26-fpm-alpine -t php2shell-lab:8.4.26 php2shell-lab
-docker run -d --name php2shell-vm --memory=256m --cpus=1 -p 127.0.0.1:8080:80 php2shell-lab:8.4.26</div>
-            <div class="sol-expect">Done when: the second command prints a long code. The lab is now running at <code>http://127.0.0.1:8080</code></div>
+            <p class="sol-h">Install Docker (the box that runs the lab)</p>
+            <p class="sol-text">Docker runs the lab in a safe, separate box on your computer. Install Docker Desktop (Windows or Mac) or Docker Engine (Linux). Then open a terminal and check it works:</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker --version</div>            <div class="sol-expect">You should see a line like <code>Docker version 24.0.5</code>. Any version is fine.</div>
             <label class="sol-done"><input type="checkbox" data-step-check="1"> I did this step</label>
           </div>
         </div>
       </div>
 
-      <!-- step 2 -->
       <div class="sol-card" data-step>
         <div class="sol-step">
           <div class="sol-num">2</div>
           <div class="sol-body">
-            <p class="sol-h">Check the PHP version</p>
-            <p class="sol-text">Ask the website which version of PHP it runs.</p>
-            <div class="sol-code"><button type="button" class="sol-copy">Copy</button>curl -s "http://127.0.0.1:8080/index.php?api=ping"</div>
-            <div class="sol-expect">Look for <code>"php": "8.4.26"</code>. That is the version you are checking. Write it down.</div>
+            <p class="sol-h">Start the lab</p>
+            <p class="sol-text">In the <code>cvephp</code> folder, run these two lines. The first builds the lab, the second starts it.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker build -f php2shell-lab/Dockerfile --build-arg PHP_IMAGE=php:8.4.26-fpm-alpine -t php2shell-lab:8.4.26 php2shell-lab
+docker run -d --name php2shell-vm --memory=256m --cpus=1 -p 127.0.0.1:8080:80 php2shell-lab:8.4.26</div>            <div class="sol-expect">The second line prints a long code. That means the lab is running.</div>
             <label class="sol-done"><input type="checkbox" data-step-check="2"> I did this step</label>
           </div>
         </div>
       </div>
 
-      <!-- step 3 -->
       <div class="sol-card" data-step>
         <div class="sol-step">
           <div class="sol-num">3</div>
           <div class="sol-body">
-            <p class="sol-h">Compare it with the fixed versions (this checks both bugs)</p>
-            <p class="sol-text">The bugs are fixed in these versions (or any newer one):</p>
-            <ul class="sol-list">
-              <li>PHP 8.4.27</li>
-              <li>PHP 8.5.12</li>
-              <li>PHP 8.3.36</li>
-              <li>PHP 8.2.35</li>
-            </ul>
-            <p class="sol-text">Our lab runs <strong>8.4.26</strong>. That is lower than <strong>8.4.27</strong>, so it is <strong>not patched</strong>. Rule of thumb: if your version number is lower than the fixed one, update it.</p>
+            <p class="sol-h">Check the lab answers</p>
+            <p class="sol-text">Ask the lab a simple question. Copy this line, or open the link in your browser:</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>curl -s "http://127.0.0.1:8080/index.php?api=ping"</div>            <div class="sol-expect">You should see <code>"status": "ok"</code>. If not, wait 10 seconds and try again.</div>
             <label class="sol-done"><input type="checkbox" data-step-check="3"> I did this step</label>
           </div>
         </div>
       </div>
 
-      <!-- step 4 -->
+      <p class="sol-title" style="font-size:16px;margin:18px 4px 0">Part 2: Find out which PHP version is running</p>
+
       <div class="sol-card" data-step>
         <div class="sol-step">
           <div class="sol-num">4</div>
           <div class="sol-body">
-            <p class="sol-h">Check the settings behind each bug</p>
-            <p class="sol-text">Run this command to see the settings:</p>
-            <div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker exec php2shell-vm php -i | grep -E "^(memory_limit|session.upload_progress.enabled)"</div>
-            <ul class="sol-list">
-              <li><strong>Bug 1:</strong> <code>memory_limit = 256M</code>. Each page gets a fixed amount of memory, and bug 1 is about running out of it.</li>
-              <li><strong>Bug 2:</strong> <code>session.upload_progress.enabled = On</code>. This is the feature bug 2 depends on. <code>On</code> means it is switched on.</li>
-            </ul>
+            <p class="sol-h">Read the PHP version</p>
+            <p class="sol-text">PHP is the programming language the website is built with. Both bugs live inside PHP, so the version matters most.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>curl -s "http://127.0.0.1:8080/index.php?api=ping"</div>            <div class="sol-expect">Look for <code>"php": "8.4.26"</code> and <code>"sapi": "fpm-fcgi"</code>. Write both down. <code>fpm-fcgi</code> means PHP is serving the website, which is the case the bugs care about.</div>
             <label class="sol-done"><input type="checkbox" data-step-check="4"> I did this step</label>
           </div>
         </div>
       </div>
 
-      <!-- step 5 -->
       <div class="sol-card" data-step>
         <div class="sol-step">
           <div class="sol-num">5</div>
           <div class="sol-body">
-            <p class="sol-h">Optional: compare with a fixed copy</p>
-            <p class="sol-text">This builds the same lab with the fixed PHP version, so you can see the difference. Run these lines:</p>
-            <div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker build -f php2shell-lab/Dockerfile --build-arg PHP_IMAGE=php:8.4.27-fpm-alpine -t php2shell-lab:8.4.27 php2shell-lab
-docker run -d --name php2shell-patched --memory=256m --cpus=1 -p 127.0.0.1:8081:80 php2shell-lab:8.4.27
-curl -s "http://127.0.0.1:8081/index.php?api=ping"</div>
-            <div class="sol-expect">Done when the last line shows <code>"php": "8.4.27"</code>. Same setup, only the version is different.</div>
+            <p class="sol-h">Check whether that version is fixed</p>
+            <p class="sol-text">Both bugs are fixed in these versions (or any newer one): <strong>8.4.27</strong>, 8.5.12, 8.3.36, 8.2.35.</p>            <p class="sol-text">Our lab runs <strong>8.4.26</strong>. That is lower than 8.4.27, so the lab is <strong>NOT patched</strong> for <strong>both</strong> bugs.</p>            <div class="sol-expect">Simple rule: lower number than the fixed one means not patched.</div>
             <label class="sol-done"><input type="checkbox" data-step-check="5"> I did this step</label>
           </div>
         </div>
       </div>
 
-      <!-- step 6 -->
+      <p class="sol-title" style="font-size:16px;margin:18px 4px 0">Part 3: Bug 1, CVE-2026-109618 (the memory bug)</p>
+
       <div class="sol-card" data-step>
         <div class="sol-step">
           <div class="sol-num">6</div>
           <div class="sol-body">
-            <p class="sol-h">Write your answer</p>
-            <p class="sol-text">Copy this sentence and fill in your own numbers:</p>
-            <div class="sol-code"><button type="button" class="sol-copy">Copy</button>Our lab runs PHP 8.4.26. The fixed version is 8.4.27, so it is NOT patched for CVE-2026-109618 and CVE-2026-109619. Found settings: memory_limit 256M, session.upload_progress On. Recommendation: update PHP to 8.4.27 or newer. We did not attack the system.</div>
+            <p class="sol-h">Check the memory limit</p>
+            <p class="sol-text">Bug 1 happens when PHP runs out of memory. The memory limit is the cap on how much memory one page can use. A small cap makes running out easier, so we check it.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker exec php2shell-vm php -i | grep -E "^(memory_limit|post_max_size)"</div><ul class="sol-list"><li><code>memory_limit => 256M</code>: the cap is small, so bug 1 is possible.</li><li><code>post_max_size => 24M</code>: how big a form upload can be. Bigger uploads give more room to fill memory.</li></ul>            <p class="sol-text"><strong>Result for bug 1:</strong> the setting is present, and the version is not fixed. Bug 1 is <strong>possible</strong> here.</p>
             <label class="sol-done"><input type="checkbox" data-step-check="6"> I did this step</label>
           </div>
         </div>
       </div>
 
-      <!-- step 7 -->
+      <p class="sol-title" style="font-size:16px;margin:18px 4px 0">Part 4: Bug 2, CVE-2026-109619 (the leftover data bug)</p>
+
       <div class="sol-card" data-step>
         <div class="sol-step">
           <div class="sol-num">7</div>
           <div class="sol-body">
-            <p class="sol-h">Clean up</p>
-            <p class="sol-text">Stop and remove the lab when you are finished:</p>
-            <div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker rm -f php2shell-vm php2shell-patched</div>
+            <p class="sol-h">Check the upload progress feature</p>
+            <p class="sol-text">Bug 2 needs a feature called upload progress. It is used to show how far a file upload has got. When it is on, the bug's path is open.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker exec php2shell-vm php -i | grep "^session.upload_progress.enabled"</div>            <div class="sol-expect">You should see <code>session.upload_progress.enabled => On</code>.</div>            <p class="sol-text"><strong>Result:</strong> the feature is on, so bug 2's path is open.</p>
             <label class="sol-done"><input type="checkbox" data-step-check="7"> I did this step</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="sol-card" data-step>
+        <div class="sol-step">
+          <div class="sol-num">8</div>
+          <div class="sol-body">
+            <p class="sol-h">Check how long PHP workers live</p>
+            <p class="sol-text">A worker is a helper process that handles visitors. Bug 2 needs a worker to keep old data around for the next request. If workers never restart, the old data stays. We check the restart setting:</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker exec php2shell-vm sh -c "grep -R pm.max_requests /usr/local/etc/php-fpm.d/"</div>            <div class="sol-expect">You should see <code>pm.max_requests = 0</code>. Zero means workers never restart, so the old data stays around.</div>            <p class="sol-text"><strong>Result for bug 2:</strong> the feature is on and workers never restart. Bug 2 is <strong>possible</strong> here.</p>
+            <label class="sol-done"><input type="checkbox" data-step-check="8"> I did this step</label>
+          </div>
+        </div>
+      </div>
+
+      <p class="sol-title" style="font-size:16px;margin:18px 4px 0">Part 5: Prove the fix works</p>
+
+      <div class="sol-card" data-step>
+        <div class="sol-step">
+          <div class="sol-num">9</div>
+          <div class="sol-body">
+            <p class="sol-h">Build a fixed copy to compare (recommended)</p>
+            <p class="sol-text">This builds the same lab, but with the fixed PHP version. Only the version changes, so you can see the difference.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker build -f php2shell-lab/Dockerfile --build-arg PHP_IMAGE=php:8.4.27-fpm-alpine -t php2shell-lab:8.4.27 php2shell-lab
+docker run -d --name php2shell-patched --memory=256m --cpus=1 -p 127.0.0.1:8081:80 php2shell-lab:8.4.27
+curl -s "http://127.0.0.1:8081/index.php?api=ping"</div>            <div class="sol-expect">The last line should show <code>"php": "8.4.27"</code>. That version is fixed for both bugs.</div>
+            <label class="sol-done"><input type="checkbox" data-step-check="9"> I did this step</label>
+          </div>
+        </div>
+      </div>
+
+      <p class="sol-title" style="font-size:16px;margin:18px 4px 0">Part 6: Write your answer</p>
+
+      <div class="sol-card" data-step>
+        <div class="sol-step">
+          <div class="sol-num">10</div>
+          <div class="sol-body">
+            <p class="sol-h">Write the report (copy and fill in)</p>
+            <p class="sol-text">Use this sentence and put in your own numbers:</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>Our lab runs PHP 8.4.26 (fpm-fcgi). The fixed version is 8.4.27, so it is NOT patched for CVE-2026-109618 (memory bug) or CVE-2026-109619 (leftover data bug). Found: memory_limit 256M, post_max_size 24M, session.upload_progress On, pm.max_requests 0. Recommendation: update PHP to 8.4.27 or newer and restart the workers. We did not attack the system.</div>
+            <label class="sol-done"><input type="checkbox" data-step-check="10"> I did this step</label>
+          </div>
+        </div>
+      </div>
+
+      <p class="sol-title" style="font-size:16px;margin:18px 4px 0">Part 7: Clean up</p>
+
+      <div class="sol-card" data-step>
+        <div class="sol-step">
+          <div class="sol-num">11</div>
+          <div class="sol-body">
+            <p class="sol-h">Stop and remove the lab</p>
+            <p class="sol-text">Stop and remove both boxes when you are finished:</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker rm -f php2shell-vm php2shell-patched</div>
+            <label class="sol-done"><input type="checkbox" data-step-check="11"> I did this step</label>
           </div>
         </div>
       </div>
