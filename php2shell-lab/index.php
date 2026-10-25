@@ -50,9 +50,9 @@ function container_uptime(): string
         return '—';
     }
     $s = (float) explode(' ', trim($raw))[0];
-    $d = (int) ($s / 86400);
-    $h = (int) (($s % 86400) / 3600);
-    $m = (int) (($s % 3600) / 60);
+    $d = (int) floor($s / 86400);
+    $h = (int) floor(fmod($s, 86400) / 3600);
+    $m = (int) floor(fmod($s, 3600) / 60);
     if ($d > 0) {
         return sprintf('%dd %dh', $d, $h);
     }
@@ -568,6 +568,17 @@ $boot = [
         <a href="#" data-view="settings" class="nav-link group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/70 dark:hover:text-white">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 shrink-0 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300"><path d="M5 5v14M12 5v14M19 5v14"/><circle cx="5" cy="10" r="2" fill="#fff"/><circle cx="12" cy="15" r="2" fill="#fff"/><circle cx="19" cy="8" r="2" fill="#fff"/></svg>
           Settings
+        </a>
+      </div>
+    </div>
+
+    <div>
+      <p class="px-3 pb-2 text-[11px] font-semibold uppercase tracking-widest text-rose-500 dark:text-rose-400">Security Lab</p>
+      <div class="space-y-1">
+        <a href="#" data-view="lab" class="nav-link group flex items-center gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/15">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 shrink-0 text-rose-500 dark:text-rose-400"><path d="M9 3h6l-1 7a5 5 0 01-4 0L9 3z"/><path d="M8 14h8"/><path d="M7 17h10"/><path d="M12 10v4"/><path d="M5 21h14"/></svg>
+          Lab Guide
+          <span class="ml-auto rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-bold text-white">2 CVEs</span>
         </a>
       </div>
     </div>
@@ -1210,6 +1221,213 @@ $boot = [
         </div>
       </div>
     </section>
+
+    <!-- ══════════════════════════ LAB GUIDE VIEW ══════════════════════════ -->
+    <section data-view-panel="lab" class="hidden space-y-6">
+      <!-- hero -->
+      <div class="overflow-hidden rounded-2xl border border-rose-300 bg-gradient-to-br from-rose-50 via-white to-indigo-50 shadow-sm dark:border-rose-500/25 dark:from-rose-500/10 dark:via-slate-900 dark:to-indigo-500/10">
+        <div class="px-6 py-6 sm:px-8 sm:py-7">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-rose-600 px-2.5 py-1 text-[11px] font-bold text-white"><span class="h-1.5 w-1.5 rounded-full bg-white animate-ping"></span> VULNERABLE LAB</span>
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">ISOLATED USE ONLY</span>
+                <span class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-mono font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">PHP <?= e(PHP_VERSION) ?> · <?= e(PHP_SAPI) ?></span>
+              </div>
+              <h2 class="mt-3 text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">PHP2Shell Lab — Solving Guide</h2>
+              <p class="mt-1.5 max-w-3xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">How to find, verify and demonstrate <span class="font-mono font-semibold text-rose-600 dark:text-rose-400">CVE-2026-109618</span> and <span class="font-mono font-semibold text-rose-600 dark:text-rose-400">CVE-2026-109619</span> inside this isolated container. Both flaws live in the PHP engine (PHP-FPM SAPI), not in this app code.</p>
+              <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Built for <code class="rounded bg-slate-100 px-1 py-0.5 font-mono dark:bg-slate-800">php:8.4.26-fpm-alpine</code> (last 8.4 before patch). Fixed in 8.4.27 / 8.5.12 / 8.3.36 / 8.2.35. <span class="font-semibold">Never expose this container publicly.</span></p>
+            </div>
+            <div class="flex shrink-0 items-center gap-2">
+              <button type="button" onclick="document.querySelector('[data-lab-tab=overview]')?.click()" class="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-500">Start walkthrough</button>
+              <a href="#" data-view="runtime" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">Check runtime</a>
+            </div>
+          </div>
+          <div class="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Your Engine Now</p>
+              <p class="mt-1 font-mono text-sm font-bold text-slate-900 dark:text-white"><?= e(PHP_VERSION) ?> <span class="font-normal text-slate-500"><?= e(PHP_SAPI) ?></span></p>
+              <p class="mt-1 text-xs text-emerald-600 dark:text-emerald-400">● Expected: 8.4.26 fpm-fcgi = vulnerable</p>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Uptime / Worker</p>
+              <p class="mt-1 font-mono text-sm font-bold text-slate-900 dark:text-white"><?= e(container_uptime()) ?> <span class="font-normal text-slate-500">· pid <?= getmypid() ?></span></p>
+              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Verify with <code class="font-mono">supervisorctl status</code></p>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Lab Health</p>
+              <p class="mt-1 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white"><span class="h-2 w-2 rounded-full bg-emerald-500"></span> nginx :80 → php-fpm :9000</p>
+              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400"><a class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline" href="index.php?api=ping" target="_blank">/index.php?api=ping</a> should return <code>status:ok</code></p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- error fix note -->
+      <div class="rounded-xl border border-emerald-500/30 bg-emerald-50 px-4 py-3 text-sm leading-relaxed text-emerald-900 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-200">
+        <span class="font-bold">✓ UI bug fixed in this build:</span> <code class="font-mono">container_uptime()</code> previously used float <code class="font-mono">%</code> which on PHP 8.4 emitted <em>“Implicit conversion from float 2437.52 to int loses precision”</em> on lines 54–55. Now it uses <code class="font-mono">fmod()</code> + <code class="font-mono">floor()</code>. If you still see those warnings, rebuild the image: <code class="rounded bg-white px-1 py-0.5 font-mono text-xs dark:bg-slate-800">docker build -t php2shell-lab:8.4.26 . && docker rm -f php2shell-vm && docker run -d --name php2shell-vm -p 127.0.0.1:8080:80 php2shell-lab:8.4.26</code>
+      </div>
+
+      <!-- tabs -->
+      <div class="flex flex-wrap gap-2">
+        <button type="button" data-lab-tab="overview" class="lab-tab rounded-full bg-indigo-600 px-4 py-1.5 text-xs font-bold text-white shadow-sm">Overview</button>
+        <button type="button" data-lab-tab="cve618" class="lab-tab rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">CVE-2026-109618</button>
+        <button type="button" data-lab-tab="cve619" class="lab-tab rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">CVE-2026-109619</button>
+        <button type="button" data-lab-tab="verify" class="lab-tab rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Verify &amp; Patch Test</button>
+      </div>
+
+      <!-- ══ Overview panel ══ -->
+      <div data-lab-panel="overview" class="space-y-4">
+        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white">Architecture You Are Attacking</h3>
+          <p class="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">Single container “VM”: <code class="font-mono font-semibold">supervisord (PID 1) → nginx :80 → php-fpm 127.0.0.1:9000</code>. The app (this page) is just a realistic dashboard; the bug is in <strong>php-src</strong> itself. That’s why even <code class="font-mono">?api=ping</code> proves you hit the FPM engine.</p>
+          <div class="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-200 dark:border-slate-700">
+<pre>host 127.0.0.1:8080 ──► nginx :80 (supervised)
+  ├── /healthz            nginx only  →  200 ok
+  ├── *.php  ──FastCGI──► php-fpm 127.0.0.1:9000  (pool www)
+  │                         └─ PHP 8.4.26  CVE-2026-109618 + CVE-2026-109619
+  └── /        try_files → /index.php
+supervisord = PID 1   docker logs -f php2shell-vm</pre>
+          </div>
+          <div class="mt-4 grid gap-3 sm:grid-cols-2">
+            <div class="rounded-xl bg-indigo-50 p-3 dark:bg-indigo-500/10">
+              <p class="text-xs font-bold text-indigo-900 dark:text-indigo-200">CVE-2026-109618 — OOM longjmp</p>
+              <p class="mt-1 text-xs leading-relaxed text-indigo-800/80 dark:text-indigo-200/80">Engine runs out of memory while allocating a request, does <code class="font-mono">longjmp</code> to bail out, but leaves request memory uninitialized. Next allocation can see corrupted / previous content → RCE. Pre-auth, FPM only. CVSS 9.2. Fixed 8.4.27.</p>
+            </div>
+            <div class="rounded-xl bg-rose-50 p-3 dark:bg-rose-500/10">
+              <p class="text-xs font-bold text-rose-900 dark:text-rose-200">CVE-2026-109619 — Stale global state</p>
+              <p class="mt-1 text-xs leading-relaxed text-rose-800/80 dark:text-rose-200/80">Freed request memory is not cleared from a global; next request on the <em>same FPM worker</em> reuses that pointer → use-after-free / info leak / RCE. Pre-auth, FPM only. CVSS 9.2. Fixed 8.4.27.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white">Step-by-step — Solve the Lab</h3>
+          <ol class="mt-3 space-y-3 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+            <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">1</span><span><strong>Build &amp; run isolated:</strong> <code class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs dark:bg-slate-800">cd php2shell-lab && docker build -t php2shell-lab:8.4.26 . && docker run -d --name php2shell-vm -p 127.0.0.1:8080:80 --memory=512m --cpus=1 php2shell-lab:8.4.26</code>. Publish only on <code class="font-mono">127.0.0.1</code>. Never expose to your LAN.</span></li>
+            <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">2</span><span><strong>Confirm you are on the vulnerable engine:</strong> <code class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs dark:bg-slate-800">curl -s http://127.0.0.1:8080/index.php?api=ping | jq</code> → <code class="font-mono">php: 8.4.26 + sapi: fpm-fcgi</code>. Also check the green “System Health” badge and the “Runtime Environment” view → PHP version / Zend / memory_limit = 256M in this image.</span></li>
+            <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">3</span><span><strong>Do a safe baseline (no payload):</strong> <code class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs dark:bg-slate-800">python3 cve-demonstrations/collect_runtime.py --port 8080 &gt; baseline.json</code> (included in this repo). It does one ordinary GET, checks <code class="font-mono">sapi==fpm-fcgi</code>, and refuses non-loopback hosts.</span></li>
+            <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-600 text-xs font-bold text-white">4</span><span><strong>Test CVE-2026-109618:</strong> see next tab. The gist: trigger an allocation that hits <code class="font-mono">memory_limit</code> inside the engine; watch for the OOM → uninitialized memory path. A normal <code>Allowed memory size exhausted</code> message is <em>expected</em> — only a sanitizer/ASAN trace of uninitialized use proves the defect.</span></li>
+            <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-600 text-xs font-bold text-white">5</span><span><strong>Test CVE-2026-109619:</strong> see its tab. The gist: pin one FPM worker (<code class="font-mono">pm=static, max_children=1, max_requests=0</code>), send request A that leaves a freed object in a global, then request B on the <em>same PID</em> that dereferences it. You must instrument the pool to log PIDs.</span></li>
+            <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">6</span><span><strong>Compare patched:</strong> rebuild with <code class="font-mono">--build-arg PHP_IMAGE=php:8.4.27-fpm-alpine</code> (or 8.5.12 / 8.3.36 / 8.2.35) and repeat identical steps. Vulnerability should disappear; keep image digests and <code class="font-mono">docker inspect</code> with your evidence. <strong>A crash or 500 alone is not RCE.</strong></span></li>
+          </ol>
+          <div class="mt-4 rounded-xl border border-amber-400/40 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200"><strong>Rule:</strong> until you have a vendor advisory + fixing commit + sanitizer/debugger trace tied to the exact source revision, report <code class="font-mono">not reproduced / insufficient evidence</code>. Version strings alone cannot prove either bug (backported patches count).</div>
+        </div>
+      </div>
+
+      <!-- ══ CVE-2026-109618 panel ══ -->
+      <div data-lab-panel="cve618" class="hidden space-y-4">
+        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div class="flex flex-wrap items-center gap-2">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white">CVE-2026-109618 · RCE via OOM corruption</h3>
+            <span class="rounded-full bg-rose-600 px-2 py-0.5 text-[11px] font-bold text-white">CVSS 4.0 9.2</span>
+            <span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-mono text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">FPM SAPI · pre-auth</span>
+          </div>
+          <table class="mt-3 w-full text-left text-xs">
+            <tr class="border-b border-slate-100 dark:border-slate-800"><th class="py-2 font-semibold text-slate-500">Affected</th><td class="py-2 font-mono">PHP 8.4 &lt; 8.4.27, 8.5 &lt; 8.5.12, 8.3 &lt; 8.3.36, 8.2 &lt; 8.2.35</td></tr>
+            <tr class="border-b border-slate-100 dark:border-slate-800"><th class="py-2 font-semibold text-slate-500">Fixed in</th><td class="py-2 font-mono">8.4.27 / 8.5.12 / 8.3.36 / 8.2.35</td></tr>
+            <tr><th class="py-2 font-semibold text-slate-500">Where</th><td class="py-2">PHP engine — request memory handling after <code class="font-mono">longjmp</code> on OOM</td></tr>
+          </table>
+          <div class="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+            <p class="text-xs font-bold text-indigo-900 dark:text-indigo-200">How to find it in the lab</p>
+            <ol class="mt-2 list-decimal space-y-1.5 pl-5 text-xs leading-relaxed text-indigo-900/80 dark:text-indigo-200/80">
+              <li>Read <code class="font-mono">cve-demonstrations/CVE-2026-109618.md</code> in the repo — evidence worksheet is there.</li>
+              <li>Build a diagnostic image with symbols / ASAN for that PHP revision (the release image has no sanitizer). Keep the exact source revision.</li>
+              <li>Use the vendor’s regression test as trigger (bound memory + timeout). The lab intentionally has <strong>no</strong> arbitrary memory-exhaustion endpoint — you add the minimal trigger yourself.</li>
+              <li>Observe: PHP’s normal <code class="font-mono">Allowed memory size exhausted</code> is expected. What proves this bug is a sanitizer trace of <em>uninitialized memory use</em> on the engine’s allocation/cleanup path tied to that revision, not the error string.</li>
+              <li>Record request, error output, worker PID, exit status, and full trace. Distinguish PHP <code class="font-mono">memory_limit 256M</code> (this image) from container OOM-killer (<code class="font-mono">docker inspect</code>).</li>
+              <li>Repeat identical request against the patched image — trace should vanish.</li>
+            </ol>
+          </div>
+          <div class="mt-3 rounded-xl bg-slate-950 p-4 font-mono text-xs text-slate-200">
+            <p class="text-slate-400"># Example — lab health check (same config you must use for the comparison)</p>
+            <p>curl -s http://127.0.0.1:8080/index.php?api=ping | jq .php,.sapi</p>
+            <p class="mt-2 text-slate-400"># Capture both runtimes for your write-up</p>
+            <p>docker inspect php2shell-vm --format '{{.Image}} {{.Config.Image}}' &gt; evidence/8.4.26-digest.txt</p>
+            <p>docker inspect php2shell-patched --format '{{.Image}}' &gt; evidence/8.4.27-digest.txt</p>
+          </div>
+          <p class="mt-2 text-[11px] text-slate-400">A crash, 500, or OOM-killed container alone does <strong>not</strong> prove memory corruption or RCE.</p>
+        </div>
+      </div>
+
+      <!-- ══ CVE-2026-109619 panel ══ -->
+      <div data-lab-panel="cve619" class="hidden space-y-4">
+        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div class="flex flex-wrap items-center gap-2">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white">CVE-2026-109619 · RCE via stale global state</h3>
+            <span class="rounded-full bg-rose-600 px-2 py-0.5 text-[11px] font-bold text-white">CVSS 4.0 9.2</span>
+            <span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-mono text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">FPM reuse · pre-auth</span>
+          </div>
+          <table class="mt-3 w-full text-left text-xs">
+            <tr class="border-b border-slate-100 dark:border-slate-800"><th class="py-2 font-semibold text-slate-500">Affected</th><td class="py-2 font-mono">PHP 8.4 &lt; 8.4.27, 8.5 &lt; 8.5.12, 8.3 &lt; 8.3.36, 8.2 &lt; 8.2.35</td></tr>
+            <tr class="border-b border-slate-100 dark:border-slate-800"><th class="py-2 font-semibold text-slate-500">Fixed in</th><td class="py-2 font-mono">8.4.27 / 8.5.12 / 8.3.36 / 8.2.35</td></tr>
+            <tr><th class="py-2 font-semibold text-slate-500">Where</th><td class="py-2">PHP engine — global still points at freed per-request memory → later request on same worker reuses it</td></tr>
+          </table>
+          <div class="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-500/20 dark:bg-rose-500/10">
+            <p class="text-xs font-bold text-rose-900 dark:text-rose-200">How to find it in the lab</p>
+            <ol class="mt-2 list-decimal space-y-1.5 pl-5 text-xs leading-relaxed text-rose-900/80 dark:text-rose-200/80">
+              <li>Read <code class="font-mono">cve-demonstrations/CVE-2026-109619.md</code>. Identify the affected global and its init/shutdown paths in the verified patch.</li>
+              <li>Build a diagnostic image and pin <strong>one FPM worker</strong>: <code class="font-mono">pm=static, pm.max_children=1, pm.max_requests=0</code>. Stop dashboard polling (it steals the worker) while you test.</li>
+              <li>Instrument your app / access log to emit worker PID per request — the bundled <code class="font-mono">?api=ping</code> does not expose it; you need to add <code class="font-mono">getmypid()</code> for this test.</li>
+              <li>Send vendor’s request A (put freed object into the global) then request B (trigger dereference). Confirm both hit the <em>same PID</em>. Capture the lifetime-violation trace; repeat with a fresh worker as control.</li>
+              <li>Persisting session data, caches, or matching response text alone are <strong>not</strong> proof of stale freed memory.</li>
+              <li>Repeat identical pair against the patched image — violation must be gone.</li>
+            </ol>
+          </div>
+          <div class="mt-3 rounded-xl bg-slate-950 p-4 font-mono text-xs text-slate-200">
+            <p class="text-slate-400"># Pin worker + observe PIDs (adjust pool conf in your diagnostic Dockerfile)</p>
+            <p>curl -s 'http://127.0.0.1:8080/index.php?api=ping&showpid=1'</p>
+            <p>docker exec php2shell-vm tail -f /var/log/nginx/access.log   # rt + urt</p>
+            <p>docker exec php2shell-vm ps -o pid,cmd                      # fpm children</p>
+          </div>
+          <p class="mt-2 text-[11px] text-slate-400">Do not use real credentials as markers — use synthetic canaries. A memory disclosure alone does not equal RCE.</p>
+        </div>
+      </div>
+
+      <!-- ══ Verify panel ══ -->
+      <div data-lab-panel="verify" class="hidden space-y-4">
+        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white">Verify you’re testing the right thing</h3>
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
+              <p class="text-xs font-semibold text-slate-700 dark:text-slate-200">Full-stack healthcheck</p>
+              <code class="mt-1 block rounded bg-white px-2 py-1.5 font-mono text-xs dark:bg-slate-900">curl -s http://127.0.0.1:8080/index.php?api=ping</code>
+              <p class="mt-1 text-xs text-slate-500">Want: <code class="font-mono">{"status":"ok","php":"8.4.26","sapi":"fpm-fcgi"}</code> · Fail means nginx or FPM is down; check <code class="font-mono">docker logs php2shell-vm</code>.</p>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
+              <p class="text-xs font-semibold text-slate-700 dark:text-slate-200">Liveness (no PHP)</p>
+              <code class="mt-1 block rounded bg-white px-2 py-1.5 font-mono text-xs dark:bg-slate-900">curl -s http://127.0.0.1:8080/healthz</code>
+              <p class="mt-1 text-xs text-slate-500">Want: <code class="font-mono">ok</code> from nginx. If this works but <code class="font-mono">api=ping</code> fails, FPM pool is broken.</p>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
+              <p class="text-xs font-semibold text-slate-700 dark:text-slate-200">Inside the container</p>
+              <code class="mt-1 block rounded bg-white px-2 py-1.5 font-mono text-xs dark:bg-slate-900">docker exec php2shell-vm php -v<br/>docker exec php2shell-vm supervisorctl status</code>
+              <p class="mt-1 text-xs text-slate-500">Both <code class="font-mono">nginx</code> and <code class="font-mono">php-fpm</code> must be <code class="font-mono">RUNNING</code>.</p>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
+              <p class="text-xs font-semibold text-slate-700 dark:text-slate-200">Evidence collector</p>
+              <code class="mt-1 block rounded bg-white px-2 py-1.5 font-mono text-xs dark:bg-slate-900">python3 cve-demonstrations/collect_runtime.py --port 8080 &gt; baseline.json</code>
+              <p class="mt-1 text-xs text-slate-500">Loopback-only, disables proxies, caps response. Keeps <code class="font-mono">image digest + config + request + worker PID + trace</code> together.</p>
+            </div>
+          </div>
+          <div class="mt-4 overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="text-[11px] uppercase tracking-wider text-slate-400"><tr><th class="py-2">Check</th><th class="py-2">This lab (vulnerable)</th><th class="py-2">Patched comparison</th></tr></thead>
+              <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                <tr><td class="py-2 font-medium">PHP image</td><td class="py-2 font-mono">php:8.4.26-fpm-alpine (digest …)</td><td class="py-2 font-mono">php:8.4.27 / 8.5.12 / 8.3.36 / 8.2.35</td></tr>
+                <tr><td class="py-2 font-medium">SAPI must be</td><td class="py-2 font-mono" colspan="2">fpm-fcgi — CLI alone does not exercise same lifecycle</td></tr>
+                <tr><td class="py-2 font-medium">CVE-2026-109618 signal</td><td class="py-2">Sanitizer trace of uninitialized use after OOM <code class="font-mono">longjmp</code></td><td class="py-2 text-emerald-600">Trace gone</td></tr>
+                <tr><td class="py-2 font-medium">CVE-2026-109619 signal</td><td class="py-2">Same-worker cross-request UAF trace on that global</td><td class="py-2 text-emerald-600">Trace gone, fresh-worker control clean</td></tr>
+                <tr><td class="py-2 font-medium">Not evidence</td><td class="py-2" colspan="2"><code class="font-mono">Allowed memory size exhausted</code> · OOM-killed container · 500 · session persistence alone · matching response text</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="rounded-2xl border border-amber-400/40 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
+          <strong>Tear down &amp; harden:</strong> <code class="rounded bg-white px-1 py-0.5 font-mono dark:bg-slate-800">docker rm -f php2shell-vm</code> when done. To fix the engine, upgrade PHP to ≥ patched versions and keep the same nginx/FPM topology — then rerun <em>your exact</em> workbook steps and confirm the traces no longer reproduce.
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- ══════════════════════════════  FOOTER  ══════════════════════════════ -->
@@ -1273,13 +1491,19 @@ window.__BOOT__ = <?= json_encode($boot, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) 
     logs:         ['System Logs',         'Nimbus Analytics / Operations / Logs'],
     integrations: ['Integrations',        'Nimbus Analytics / Platform / Integrations'],
     runtime:      ['Runtime Environment', 'Nimbus Analytics / Platform / Runtime'],
-    settings:     ['Settings',            'Nimbus Analytics / Platform / Settings']
+    settings:     ['Settings',            'Nimbus Analytics / Platform / Settings'],
+    lab:          ['Lab Guide',           'Nimbus Analytics / Security Lab / PHP2Shell']
   };
   var NAV_ACTIVE = 'nav-link group flex items-center gap-3 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-600/30 transition-colors';
   var NAV_IDLE   = 'nav-link group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/70 dark:hover:text-white';
+  var NAV_LAB_IDLE = 'nav-link group flex items-center gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/15';
   function show(view) {
     $$('[data-view-panel]').forEach(function (p) { p.classList.toggle('hidden', p.dataset.viewPanel !== view); });
-    $$('.nav-link').forEach(function (a) { a.className = a.dataset.view === view ? NAV_ACTIVE : NAV_IDLE; });
+    $$('.nav-link').forEach(function (a) {
+      if (a.dataset.view === view) a.className = NAV_ACTIVE;
+      else if (a.dataset.view === 'lab') a.className = NAV_LAB_IDLE;
+      else a.className = NAV_IDLE;
+    });
     var t = TITLES[view] || ['—', ''];
     $('#pageTitle').textContent = t[0];
     $('#pageCrumb').textContent = t[1];
@@ -1300,6 +1524,26 @@ window.__BOOT__ = <?= json_encode($boot, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) 
       if (window.innerWidth < 1024) closeNav();
     });
   });
+
+  /* ── lab tabs (inside Lab Guide view) ──────────────────── */
+  (function () {
+    var tabs = $$('.lab-tab');
+    var panels = $$('[data-lab-panel]');
+    if (!tabs.length) return;
+    var LAB_ACTIVE = 'lab-tab rounded-full bg-indigo-600 px-4 py-1.5 text-xs font-bold text-white shadow-sm';
+    var LAB_IDLE   = 'lab-tab rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300';
+    function activate(name) {
+      tabs.forEach(function (b) { b.className = b.dataset.labTab === name ? LAB_ACTIVE : LAB_IDLE; });
+      panels.forEach(function (p) { p.classList.toggle('hidden', p.dataset.labPanel !== name); });
+    }
+    tabs.forEach(function (b) {
+      b.addEventListener('click', function () { activate(b.dataset.labTab); });
+    });
+    // support ?view=lab&tab=cve618 deep link
+    var qs = new URLSearchParams(window.location.search);
+    var initial = qs.get('tab') || 'overview';
+    if (qs.get('view') === 'lab') { show('lab'); activate(['overview','cve618','cve619','verify'].indexOf(initial) !== -1 ? initial : 'overview'); }
+  })();
 
   /* ── canvas chart engine ───────────────────────────────── */
   function hexA(hex, a) {
