@@ -20,7 +20,7 @@
 > are learning, read the task, try the command, write your answer in a
 > worksheet, *then* open the spoiler.
 
-**Contents:** [Room brief](#1-room-brief) ·
+**Contents:** [🌱 Beginner Start Here](#0-beginners-guide--read-this-first-even-if-youve-never-hacked-before) · [Room brief](#1-room-brief) ·
 [Setup](#2-setup-do-this-once) · [Room map](#3-room-map) ·
 [T1 verify](#task-1--start-and-verify-the-target) ·
 [T2 recon](#task-2--black-box-recon-pretend-you-only-have-the-url) ·
@@ -37,6 +37,145 @@
 [Answer key](#4-full-answer-key) ·
 [Troubleshooting](#6-troubleshooting) ·
 [Checklist](#10-completion-checklist)
+
+---
+
+## 0. 🌱 Beginner's Guide — Read This First (Even If You've Never Hacked Before)
+
+> **First time? Welcome!** This section explains *everything* in plain English. If terms like “CVE”, “Docker”, or “PHP-FPM” sound scary, start here. You can solve this entire lab even if this is your first day — just follow the steps one by one.
+
+### What is this lab about? (The 30-second version)
+
+Imagine a company called **Nimbus Analytics** runs a website that shows business charts. Under the hood, that website uses a programming language called **PHP** (very common — powers WordPress, Facebook, Wikipedia).
+
+In October 2026, the PHP team announced **two critical bugs** in the PHP engine itself:
+
+- **CVE-2026-109618** — When PHP runs out of memory, it tries to “jump out” of the work it was doing, but it forgets to clean up properly. Leftover memory can leak or be hijacked → attacker can run their own code.
+- **CVE-2026-109619** — PHP keeps a global variable pointing to memory that was already freed. The *next* visitor on the *same worker* can reuse that dangling pointer → attacker can steal data or run code.
+
+Both have **CVSS 9.2/10 = Critical**, require **no login**, and work over the internet (`AV:N` = Attack Vector Network). They were fixed in **PHP 8.4.27, 8.5.12, 8.3.36, 8.2.35**.
+
+Your job in this lab is **NOT to hack**, but to **prove the bug exists** like a professional security tester would: find the version, prove it’s unpatched, prove the dangerous settings are present, document it, and show the fix works. That’s what clients actually pay for.
+
+### Key words — simple glossary
+
+| Word you’ll see | What it means in plain English |
+|---|---|
+| **CVE** | “Common Vulnerabilities and Exposures” — an official ID for a bug (e.g., CVE-2026-109618). Like a ticket number. |
+| **PHP** | Programming language that builds the website. The bug is *in PHP itself*, not in the dashboard you see. |
+| **Docker / Container** | A lightweight pretend computer inside your real computer. The lab runs inside one so it can’t hurt your real system. Think: a sandbox. |
+| **nginx** | The front door (web server). It receives your browser request and hands `.php` files to PHP-FPM. |
+| **PHP-FPM** | The workers that actually run PHP code. One master + several child workers. They live behind nginx. |
+| **SAPI** | “Server API” — the *way* PHP runs. `fpm-fcgi` = PHP-FPM, `cli` = command line, `apache2handler` = Apache. Only the *web* SAPI matters here. |
+| **SAPI = fpm-fcgi** | You’re talking to the real website workers. `cli` would just be your local terminal — different thing. |
+| **memory_limit** | Max memory one request can use. Here it’s 256M. If a request needs more → PHP says “out of memory”. |
+| **supervisord** | A small program that is PID 1 and keeps nginx + php-fpm running. Like a babysitter. |
+| **CVSS 9.2** | Severity score from 0–10. 9+ = Critical. |
+| **Patch / Fix** | New version where the bug is repaired. Here: upgrade from 8.4.26 → 8.4.27. |
+| **Backport** | When Linux vendors put the fix into an *old* version number. So `8.4.26` on Ubuntu might *already* be patched! Version alone = not proof. |
+| **Evidence ladder L0–L4** | How sure you are. L0 = “maybe PHP?”, L1 = “old version”, L2 = “old + dangerous settings”, L3 = “saw the bug in a debugger”, L4 = “fully hacked it”. Most real jobs stop at L2 — and that’s enough to force a patch! |
+| **RCE** | Remote Code Execution — attacker runs their code on the server. Worst kind. The lab warns you *not* to try this. |
+| **Loopback / 127.0.0.1** | “This computer only”. Safe — no one on the internet can see your lab. |
+| **`curl`** | A command-line tool that fetches web pages. Like a browser but text-only. |
+| **`jq`** | Makes JSON pretty in the terminal. Optional but nice. |
+| **`docker exec`** | Run a command *inside* the container. |
+
+### The big picture — how the lab is built
+
+```
+Your browser
+    │
+    ▼
+ nginx on :80  (the front door, shows /healthz directly)
+    │
+    ├── location /         → try index.php
+    └── location ~ \.php$  → FastCGI → 127.0.0.1:9000
+                                   │
+                                   ▼
+                            php-fpm pool “www”
+                            master + 2 workers
+                            PHP 8.4.26  ← VULNERABLE
+                            CVE-2026-109618 + CVE-2026-109619
+```
+
+**What you will prove in order:**
+
+1. The website is up and you know which programs are running.
+2. You can see PHP from the outside (headers, fingerprint).
+3. You know the exact PHP version + SAPI (8.4.26 + fpm-fcgi).
+4. That version is *before* the fix (8.4.27) and has no backport → vulnerable.
+5. The dangerous settings are present (memory limits, upload progress, worker recycling).
+6. You saved a clean baseline (evidence folder).
+7. You understand worker reuse (same PID trick for CVE-2026-109619).
+8. You know what is *not* evidence (a crash ≠ RCE).
+9. You wrote a professional report at L2.
+10. You know how to hunt for past attacks.
+11. You patched and proved the fix.
+12. You cleaned up.
+
+**Win condition:** A one-page report at L2 that another tester could reproduce from your evidence alone. No shell needed!
+
+### How to use this guide as a beginner
+
+1. **Open a terminal** (Mac: `Terminal` app, Windows: WSL or Git Bash, Linux: Ctrl+Alt+T).
+2. **Copy-paste commands exactly** — every code block is tested. Click the copy button in the website’s Solution tab.
+3. **Compare your output** to the “Expected” blocks. Small differences (timestamps, PIDs) are OK; the shape must match.
+4. **Don’t skip checkpoints** ✅ — they tell you “you’re good to continue”.
+5. **If stuck:** jump to [Troubleshooting](#6-troubleshooting), or rebuild the container and retry from Task 1. It’s disposable.
+6. **Take notes:** write your answers in a notebook or `notes.txt` before peeking at the hidden Answers. That’s how you learn.
+7. **In the website:** go to **Solution → Walkthrough (Beginner Guide)** tab — it’s the same guide but interactive with progress bars and copy buttons.
+
+### Your first 3 commands (try them now!)
+
+```bash
+# 1. Do you have Docker?
+docker --version
+# Should print something like: Docker version 24.0.5 ...
+
+# 2. Do you have curl and python?
+curl --version | head -n 1
+python3 --version
+
+# 3. Can you fetch a website? (no lab needed yet)
+curl -s https://example.com | head
+```
+
+If those work, you’re ready. If `docker` is missing, install [Docker Desktop](https://docs.docker.com/get-docker/) first and restart your terminal.
+
+### Two CVEs — how they differ (you must find BOTH)
+
+| | CVE-2026-109618 (OOM corruption) | CVE-2026-109619 (Stale global) |
+|---|---|---|
+| **Plain English** | PHP runs out of memory, panics, and leaves a mess. Next allocation sees garbage. | PHP frees memory but forgets to clear the global pointer. Next request on same worker reuses it. |
+| **Needs** | Finite `memory_limit` + controllable OOM (e.g., big multipart) | `session.upload_progress.enabled=On` (default) + **same worker** twice + fatal error |
+| **Demonstrated on** | `mod_php` (complete RCE). FPM: “susceptible by code review, no complete FPM exploit demonstrated” | `mod_php` **and** `FPM` (validated) |
+| **Fixed in** | 8.4.27 / 8.5.12 / 8.3.36 / 8.2.35 | Same |
+| **Your evidence in this lab** | Version + SAPI + `memory_limit=256M` + advisory says susceptible. You will see a normal OOM error on BOTH vulnerable and patched — that proves error ≠ exploit. | Version + SAPI + `upload_progress=On` + `pm.max_requests=0` (workers live forever). You will pin one worker and show same-PID vs recycled-PID. |
+| **Honest claim (L2)** | “Potentially affected — version match + preconditions present. No complete FPM exploit demonstrated, but patch urgently.” | “Likely exposed — unpatched + FPM-validated path + preconditions present. No exploit attempted.” |
+
+**You solve BOTH by:** proving the engine is 8.4.26 fpm-fcgi (pre-fix), proving preconditions, saving baseline, and showing patched control (8.4.27) behaves differently at the evidence level (or at least documenting the L2 gap honestly). No exploit needed — that’s the professional way!
+
+---
+
+### 🗺️ Visual roadmap — where you are
+
+```
+Task 1  ✅  Is the lab running? ──► you see healthz + ping + supervisord
+Task 2  🔍  What does internet see? ──► headers leak PHP version
+Task 3  👁️  Which PHP exactly? ──► 8.4.26 + fpm-fcgi (not cli!)
+Task 4  🩹  Is it patched? ──► No, 8.4.27 is the fix
+Task 5  ⚙️  Can attacker reach bug? ──► memory/upload/session/workers
+Task 6  📦  Save evidence ──► baseline.json + hashes
+Task 7  🔄  Worker trick ──► same PID matters for 109619
+Task 8  💥  Crash ≠ hack ──► OOM on BOTH builds = not proof
+Task 9  📝  Write report ──► L2 finding, honest and reproducible
+Task 10 🔎  Hunt logs ──► did someone already exploit?
+Task 11 ✅  Patch & retest ──► 8.4.27 + new workers + same checks
+Task 12 🧹  Clean up ──► remove vulnerable image
+         └─► You win! You can now do this on real infrastructure (with permission).
+```
+
+> **Tip for beginners:** The website’s **Solution → Walkthrough** tab turns this file into an interactive checklist with progress bar, copy buttons, expected output previews, and “I did this” checkboxes that save in your browser. Open it at `http://127.0.0.1:8080/?view=lab&tab=walkthrough` once the lab is running. Everything below is also there, but nicely formatted.
 
 ---
 
