@@ -1235,11 +1235,12 @@ $boot = [
                 <span class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-mono font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">PHP <?= e(PHP_VERSION) ?> · <?= e(PHP_SAPI) ?></span>
               </div>
               <h2 class="mt-3 text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">PHP2Shell Lab — Solution</h2>
-              <p class="mt-1.5 max-w-3xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">How to find, verify and demonstrate <span class="font-mono font-semibold text-rose-600 dark:text-rose-400">CVE-2026-109618</span> and <span class="font-mono font-semibold text-rose-600 dark:text-rose-400">CVE-2026-109619</span> inside this isolated container. Both flaws live in the PHP engine (PHP-FPM SAPI), not in this app code.</p>
+              <p class="mt-1.5 max-w-3xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">How to find, verify and demonstrate <span class="font-mono font-semibold text-rose-600 dark:text-rose-400">CVE-2026-109618</span> and <span class="font-mono font-semibold text-rose-600 dark:text-rose-400">CVE-2026-109619</span> inside this isolated container — and the <strong>Real-World Hunt</strong> tab teaches how to find them on real infrastructure. Both flaws live in the PHP engine (all web-serving SAPIs; <code class="font-mono">mod_php</code> is highest risk), not in this app code.</p>
               <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Built for <code class="rounded bg-slate-100 px-1 py-0.5 font-mono dark:bg-slate-800">php:8.4.26-fpm-alpine</code> (last 8.4 before patch). Fixed in 8.4.27 / 8.5.12 / 8.3.36 / 8.2.35. <span class="font-semibold">Never expose this container publicly.</span></p>
             </div>
             <div class="flex shrink-0 items-center gap-2">
               <button type="button" onclick="document.querySelector('[data-lab-tab=overview]')?.click()" class="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-500">Start walkthrough</button>
+              <button type="button" onclick="document.querySelector('[data-lab-tab=field]')?.click()" class="rounded-lg border border-indigo-300 bg-white px-4 py-2 text-xs font-bold text-indigo-700 shadow-sm hover:bg-indigo-50 dark:border-indigo-500/40 dark:bg-slate-800 dark:text-indigo-300">Real-world guide</button>
               <a href="#" data-view="runtime" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">Check runtime</a>
             </div>
           </div>
@@ -1274,6 +1275,7 @@ $boot = [
         <button type="button" data-lab-tab="cve618" class="lab-tab rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">CVE-2026-109618</button>
         <button type="button" data-lab-tab="cve619" class="lab-tab rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">CVE-2026-109619</button>
         <button type="button" data-lab-tab="verify" class="lab-tab rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Verify &amp; Patch Test</button>
+        <button type="button" data-lab-tab="field" class="lab-tab rounded-full border border-indigo-300 bg-indigo-50 px-4 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300">Real-World Hunt · Tester Guide</button>
       </div>
 
       <!-- ══ Overview panel ══ -->
@@ -1292,11 +1294,11 @@ supervisord = PID 1   docker logs -f php2shell-vm</pre>
           <div class="mt-4 grid gap-3 sm:grid-cols-2">
             <div class="rounded-xl bg-indigo-50 p-3 dark:bg-indigo-500/10">
               <p class="text-xs font-bold text-indigo-900 dark:text-indigo-200">CVE-2026-109618 — OOM longjmp</p>
-              <p class="mt-1 text-xs leading-relaxed text-indigo-800/80 dark:text-indigo-200/80">Engine runs out of memory while allocating a request, does <code class="font-mono">longjmp</code> to bail out, but leaves request memory uninitialized. Next allocation can see corrupted / previous content → RCE. Pre-auth, FPM only. CVSS 9.2. Fixed 8.4.27.</p>
+              <p class="mt-1 text-xs leading-relaxed text-indigo-800/80 dark:text-indigo-200/80">Engine runs out of memory while allocating a request, does <code class="font-mono">longjmp</code> to bail out, but leaves request memory uninitialized. Next allocation can see corrupted / previous content → RCE. Pre-auth, all web SAPIs (<code class="font-mono">mod_php</code> highest risk; no complete FPM exploit demonstrated for this CVE). CVSS 9.2. Fixed 8.4.27.</p>
             </div>
             <div class="rounded-xl bg-rose-50 p-3 dark:bg-rose-500/10">
               <p class="text-xs font-bold text-rose-900 dark:text-rose-200">CVE-2026-109619 — Stale global state</p>
-              <p class="mt-1 text-xs leading-relaxed text-rose-800/80 dark:text-rose-200/80">Freed request memory is not cleared from a global; next request on the <em>same FPM worker</em> reuses that pointer → use-after-free / info leak / RCE. Pre-auth, FPM only. CVSS 9.2. Fixed 8.4.27.</p>
+              <p class="mt-1 text-xs leading-relaxed text-rose-800/80 dark:text-rose-200/80">Freed request memory is not cleared from a global; next request on the <em>same worker</em> reuses that pointer → use-after-free / info leak / RCE. Pre-auth, all web SAPIs; the FPM path was validated via the session lifecycle. CVSS 9.2. Fixed 8.4.27.</p>
             </div>
           </div>
         </div>
@@ -1311,7 +1313,7 @@ supervisord = PID 1   docker logs -f php2shell-vm</pre>
             <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-600 text-xs font-bold text-white">5</span><span><strong>Test CVE-2026-109619:</strong> see its tab. The gist: pin one FPM worker (<code class="font-mono">pm=static, max_children=1, max_requests=0</code>), send request A that leaves a freed object in a global, then request B on the <em>same PID</em> that dereferences it. You must instrument the pool to log PIDs.</span></li>
             <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">6</span><span><strong>Compare patched:</strong> rebuild with <code class="font-mono">--build-arg PHP_IMAGE=php:8.4.27-fpm-alpine</code> (or 8.5.12 / 8.3.36 / 8.2.35) and repeat identical steps. Vulnerability should disappear; keep image digests and <code class="font-mono">docker inspect</code> with your evidence. <strong>A crash or 500 alone is not RCE.</strong></span></li>
           </ol>
-          <div class="mt-4 rounded-xl border border-amber-400/40 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200"><strong>Rule:</strong> until you have a vendor advisory + fixing commit + sanitizer/debugger trace tied to the exact source revision, report <code class="font-mono">not reproduced / insufficient evidence</code>. Version strings alone cannot prove either bug (backported patches count).</div>
+          <div class="mt-4 rounded-xl border border-amber-400/40 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200"><strong>Rule:</strong> until you have a vendor advisory + fixing commit + sanitizer/debugger trace tied to the exact source revision, report <code class="font-mono">not reproduced / insufficient evidence</code>. Version strings alone cannot prove either bug (backported patches count). <button type="button" onclick="document.querySelector('[data-lab-tab=field]')?.click()" class="font-bold underline">Open the Real-World Hunt tab</button> for the 10-step tester workflow: inventory → fingerprint → backport check → attack requirements → evidence → report.</div>
         </div>
       </div>
 
@@ -1425,6 +1427,232 @@ supervisord = PID 1   docker logs -f php2shell-vm</pre>
         </div>
         <div class="rounded-2xl border border-amber-400/40 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
           <strong>Tear down &amp; harden:</strong> <code class="rounded bg-white px-1 py-0.5 font-mono dark:bg-slate-800">docker rm -f php2shell-vm</code> when done. To fix the engine, upgrade PHP to ≥ patched versions and keep the same nginx/FPM topology — then rerun <em>your exact</em> workbook steps and confirm the traces no longer reproduce.
+        </div>
+      </div>
+      <!-- ══ Real-world hunt panel (tester step-by-step guide) ══ -->
+      <div data-lab-panel="field" class="hidden space-y-4">
+        <div class="rounded-2xl border border-indigo-200 bg-white p-5 shadow-sm dark:border-indigo-500/20 dark:bg-slate-900">
+          <div class="flex flex-wrap items-center gap-2">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white">Tester field guide — finding PHP2Shell in the real world</h3>
+            <span class="rounded-full bg-indigo-600 px-2 py-0.5 text-[11px] font-bold text-white">10 STEPS</span>
+            <span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">no exploit payload</span>
+          </div>
+          <p class="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-400">A version string is a <strong>lead</strong>, not a finding. A defensible finding has four parts: <strong>asset + exact build</strong>, <strong>patch status</strong> (including vendor backports), <strong>reachability</strong> (SAPI + advisory attack requirements), and an honest <strong>evidence tier</strong>. Work the ten steps below in order; each one produces a piece of evidence you can paste into a ticket.</p>
+          <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div class="rounded-xl bg-indigo-50 p-2 dark:bg-indigo-500/10"><p class="text-[10px] font-bold text-indigo-900 dark:text-indigo-200 leading-tight">1 · Ground truth</p></div>
+            <div class="rounded-xl bg-indigo-50 p-2 dark:bg-indigo-500/10"><p class="text-[10px] font-bold text-indigo-900 dark:text-indigo-200 leading-tight">2 · Inventory</p></div>
+            <div class="rounded-xl bg-indigo-50 p-2 dark:bg-indigo-500/10"><p class="text-[10px] font-bold text-indigo-900 dark:text-indigo-200 leading-tight">3 · Fingerprint</p></div>
+            <div class="rounded-xl bg-amber-50 p-2 dark:bg-amber-500/10"><p class="text-[10px] font-bold text-amber-900 dark:text-amber-200 leading-tight">4 · Patch status</p></div>
+            <div class="rounded-xl bg-amber-50 p-2 dark:bg-amber-500/10"><p class="text-[10px] font-bold text-amber-900 dark:text-amber-200 leading-tight">5 · Attack requirements</p></div>
+            <div class="rounded-xl bg-amber-50 p-2 dark:bg-amber-500/10"><p class="text-[10px] font-bold text-amber-900 dark:text-amber-200 leading-tight">6 · Safe reproduction</p></div>
+            <div class="rounded-xl bg-emerald-50 p-2 dark:bg-emerald-500/10"><p class="text-[10px] font-bold text-emerald-900 dark:text-emerald-200 leading-tight">7 · Evidence ladder</p></div>
+            <div class="rounded-xl bg-emerald-50 p-2 dark:bg-emerald-500/10"><p class="text-[10px] font-bold text-emerald-900 dark:text-emerald-200 leading-tight">8 · Log hunt</p></div>
+            <div class="rounded-xl bg-emerald-50 p-2 dark:bg-emerald-500/10"><p class="text-[10px] font-bold text-emerald-900 dark:text-emerald-200 leading-tight">9 · Report</p></div>
+            <div class="rounded-xl bg-emerald-50 p-2 dark:bg-emerald-500/10"><p class="text-[10px] font-bold text-emerald-900 dark:text-emerald-200 leading-tight">10 · Retest</p></div>
+          </div>
+          <p class="mt-2 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">Each step pairs <strong>"in the real world"</strong> with a matching <strong>lab exercise</strong> in <code class="font-mono text-slate-500 dark:text-slate-300">cve-demonstrations/REAL-WORLD-TESTER-GUIDE.md</code> — no exploit payloads, version-and-config findings only.</p>
+          <div class="mt-4 rounded-xl border border-amber-400/50 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200"><strong>Rule 0 — authorization.</strong> Only assets you own or have written permission to test. Every command here is passive, read-only local triage, or aimed at the loopback lab. Never run public exploit PoCs on production — these are memory-corruption bugs, so a “harmless check” can crash workers, leak other users' session memory, or take the site down. There is no exploit payload in this guide, and you do not need one to drive a patch.</div>
+          <p class="mt-3 text-[11px] text-slate-400">Companion workbook (full commands, exercises and report template): <code class="font-mono text-slate-600 dark:text-slate-300">cve-demonstrations/REAL-WORLD-TESTER-GUIDE.md</code> in the repository. Advisory facts verified 2026-10-25 — re-read primary sources at the start of every engagement.</p>
+        </div>
+
+        <!-- ── Phase A ── -->
+        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white">Phase A — Find the assets <span class="ml-1 font-mono text-xs font-normal text-slate-400">steps 1–3</span></h3>
+          <ol class="mt-4 space-y-5 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
+            <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">1</span><div class="min-w-0 flex-1">
+              <p class="font-bold text-slate-900 dark:text-white">Build ground truth from primary sources (before touching a target).</p>
+              <p class="mt-1">Read the PHP.net advisory and both GHSAs; write a one-page “detection hypothesis”: fixed builds <code class="font-mono">8.5.12 / 8.4.27 / 8.3.36 / 8.2.35</code>, affected SAPIs (<code class="font-mono">mod_php</code> highest risk; FPM, php-cgi, FrankenPHP, LSAPI also in scope), and the fix strategy in diff keywords: <em>OOM <code class="font-mono">longjmp</code> removal</em> (618) and <em>complete request-state reset at shutdown</em> (619). Note what was <strong>demonstrated</strong> vs <strong>suspected</strong>: PHP validated RCE on <code class="font-mono">mod_php</code>; for FPM it validated the <strong>619 session-lifecycle</strong> path and says <strong>no complete FPM exploit was demonstrated for 618</strong>.</p>
+              <div class="mt-2 overflow-x-auto rounded-xl bg-slate-950 p-3 font-mono text-[11px] text-slate-200">
+                <p class="text-slate-400"># Primary sources to record in your notes (URLs at the bottom of this tab)</p>
+                <p>php.net/archive/2026.php#2026-10-21-5 · GHSA-w8hw-w9fx-j79w · GHSA-6wmf-4rv5-p3rp</p>
+                <p>cve.org CVE-2026-109618 / -109619 · CISA alert · NCSC-NL/php2shell</p>
+              </div>
+              <p class="mt-2 text-[11px] text-slate-500 dark:text-slate-400"><strong>Record:</strong> version ranges, CVSS v4.0 vector <code class="font-mono">AV:N/AC:H/AT:P/...</code> (9.2), EOL source backports for 7.4/8.0/8.1, and the temporary mitigations. <strong>Why:</strong> AC:H + AT:P mean “old version” ≠ “trivially exploitable here”.</p>
+            </div></li>
+            <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">2</span><div class="min-w-0 flex-1">
+              <p class="font-bold text-slate-900 dark:text-white">Inventory every PHP runtime you own — not just the public website.</p>
+              <p class="mt-1">Work with the asset owner from the inside out: hosts, FPM pools, containers/images, CI build contexts, and appliances/products that embed PHP. Internet-facing web-serving SAPIs come first.</p>
+              <div class="mt-2 overflow-x-auto rounded-xl bg-slate-950 p-3 font-mono text-[11px] text-slate-200">
+                <p class="text-slate-400"># Host packages (run on hosts you administer)</p>
+                <p>rpm -qa | grep -i php ; dpkg -l 'php*' | grep ^ii</p>
+                <p class="text-slate-400"># Containers / clusters / build contexts</p>
+                <p>docker ps --format '{{.Names}} {{.Image}}' ; docker image ls --digests</p>
+                <p>kubectl get pods -A -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range .spec.containers[*]}{.image}{"\n"}{end}{end}'</p>
+                <p>grep -RniE 'FROM php:|php[0-9.]*-fpm' .</p>
+                <p class="text-slate-400"># Appliances: check vendor advisories + NCSC-NL software/ list</p>
+              </div>
+              <p class="mt-2 text-[11px] text-slate-500 dark:text-slate-400"><strong>Record:</strong> <code class="font-mono">asset, owner, exposure, php source (package/image/appliance), SAPI, evidence, ticket</code>. <strong>Pitfall:</strong> embedded PHP in appliances needs its own vendor ticket — you cannot just <code class="font-mono">apt upgrade</code> it.</p>
+            </div></li>
+            <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">3</span><div class="min-w-0 flex-1">
+              <p class="font-bold text-slate-900 dark:text-white">Fingerprint safely: one ordinary GET/HEAD, then local authoritative checks.</p>
+              <div class="mt-2 overflow-x-auto rounded-xl bg-slate-950 p-3 font-mono text-[11px] text-slate-200">
+                <p class="text-slate-400"># Remote — passive, no payload</p>
+                <p>curl -sSI https://TARGET/ | grep -iE '^(HTTP/|server|x-powered-by|set-cookie)'</p>
+                <p class="text-slate-400"># Local — the SAPI that actually serves requests</p>
+                <p>php -v ; php -r 'echo PHP_VERSION," ",PHP_SAPI,PHP_EOL;'</p>
+                <p>php-fpm -v ; php -i | grep -iE 'Server API|Loaded Configuration File'</p>
+                <p class="text-slate-400"># This lab: two independent signals, loopback only</p>
+                <p>curl -s 'http://127.0.0.1:8080/index.php?api=ping' | jq .php,.sapi</p>
+                <p>python3 cve-demonstrations/collect_runtime.py --port 8080 &gt; baseline.json</p>
+              </div>
+              <p class="mt-2 text-[11px] text-slate-500 dark:text-slate-400"><strong>Want:</strong> <code class="font-mono">PHP/8.4.26</code> + <code class="font-mono">fpm-fcgi</code>. <strong>Pitfalls:</strong> <code class="font-mono">expose_php=Off</code> hides the header; CLI <code class="font-mono">php -v</code> can be a different build from FPM; a banner is L1 evidence only (step 7).</p>
+            </div></li>
+          </ol>
+        </div>
+
+        <!-- ── Phase B ── -->
+        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white">Phase B — Qualify the exposure <span class="ml-1 font-mono text-xs font-normal text-slate-400">steps 4–6</span></h3>
+          <ol class="mt-4 space-y-5 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
+            <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500 text-xs font-bold text-white">4</span><div class="min-w-0 flex-1">
+              <p class="font-bold text-slate-900 dark:text-white">Establish patch status — check for vendor backports, not just the version number.</p>
+              <div class="mt-2 overflow-x-auto rounded-xl bg-slate-950 p-3 font-mono text-[11px] text-slate-200">
+                <p class="text-slate-400"># Debian/Ubuntu · RHEL-like · Alpine</p>
+                <p>zgrep -iE 'CVE-2026-10961[89]|php2shell' /usr/share/doc/php*/changelog.Debian.gz</p>
+                <p>rpm -q --changelog php | grep -iE 'CVE-2026-10961[89]|php2shell'</p>
+                <p>apk info -vv | grep -i '^php'</p>
+                <p class="text-slate-400"># Pin digests, and compare source releases</p>
+                <p>docker image inspect --format '{{index .RepoDigests 0}}' php:8.4.26-fpm-alpine</p>
+                <p>git -C php-src log --oneline php-8.4.26..php-8.4.27 -- Zend main ext/session</p>
+              </div>
+              <div class="mt-2 overflow-x-auto"><table class="w-full text-left text-[11px]"><thead class="uppercase tracking-wider text-slate-400"><tr><th class="py-1.5">Observed</th><th class="py-1.5">Verdict</th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                <tr><td class="py-1.5 font-mono">&lt; 8.5.12 / 8.4.27 / 8.3.36 / 8.2.35, no backport</td><td class="py-1.5">Vulnerable build → step 5</td></tr>
+                <tr><td class="py-1.5">Lower version, but changelog shows backport</td><td class="py-1.5">Patched — attach changelog as evidence</td></tr>
+                <tr><td class="py-1.5 font-mono">8.1 / 8.0 / 7.4</td><td class="py-1.5">No upstream binary fix — verify source/LTS backport</td></tr>
+                <tr><td class="py-1.5">≥ fixed milestone</td><td class="py-1.5">Patched — still verify workers were restarted</td></tr>
+              </tbody></table></div>
+              <p class="mt-2 text-[11px] text-slate-500 dark:text-slate-400"><strong>Restart matters:</strong> a patched package with old FPM workers still running is an unpatched process. Check with <code class="font-mono">ps -o pid,lstart,cmd -C php-fpm</code>.</p>
+            </div></li>
+            <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500 text-xs font-bold text-white">5</span><div class="min-w-0 flex-1">
+              <p class="font-bold text-slate-900 dark:text-white">Check the attack requirements — the <code class="font-mono">AT:P</code> in the CVSS vector.</p>
+              <p class="mt-1">Read the <strong>effective</strong> INI of the web SAPI, front-door limits, per-request INI overrides, and worker lifecycle. This turns a scanner hit into a real finding.</p>
+              <div class="mt-2 overflow-x-auto rounded-xl bg-slate-950 p-3 font-mono text-[11px] text-slate-200">
+                <p>php --ini</p>
+                <p>php -i | grep -iE 'memory_limit|post_max_size|upload_max_filesize|max_file_uploads|session.upload_progress.enabled|fatal_error_backtraces|log_errors|error_log|error_reporting|max_execution_time'</p>
+                <p>php-fpm -tt 2&gt;&amp;1 | grep -iE 'php_admin|php_value|pm.max_requests|catch_workers_output'</p>
+                <p>nginx -T 2&gt;/dev/null | grep -iE 'client_max_body_size|fastcgi_pass|PHP_VALUE|PHP_ADMIN_VALUE'</p>
+                <p>grep -RniE 'php_(admin_)?value|PHP_(ADMIN_)?VALUE' /etc/nginx /etc/apache2 /etc/httpd 2&gt;/dev/null</p>
+                <p>find /var/www -name '.user.ini' -o -name '.htaccess' 2&gt;/dev/null</p>
+              </div>
+              <div class="mt-2 overflow-x-auto"><table class="w-full text-left text-[11px]"><thead class="uppercase tracking-wider text-slate-400"><tr><th class="py-1.5">Condition</th><th class="py-1.5">Why it matters</th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                <tr><td class="py-1.5 font-mono">memory_limit</td><td class="py-1.5">618 needs a controllable OOM; <code class="font-mono">-1</code> is a partial mitigation</td></tr>
+                <tr><td class="py-1.5 font-mono">post_max_size, multipart</td><td class="py-1.5">OOM strategies abuse part headers, nesting, empty file controls</td></tr>
+                <tr><td class="py-1.5 font-mono">session.upload_progress.enabled=1</td><td class="py-1.5">confirmed early producer/consumer for 619; no <code class="font-mono">session_start()</code> needed</td></tr>
+                <tr><td class="py-1.5 font-mono">fatal_error_backtraces=1</td><td class="py-1.5">PHP 8.5 confirmed producer of stale backtrace state</td></tr>
+                <tr><td class="py-1.5 font-mono">PHP_VALUE / .htaccess diagnostics</td><td class="py-1.5">INI-warning consumer before request init (619)</td></tr>
+                <tr><td class="py-1.5 font-mono">pm.max_requests</td><td class="py-1.5">producer + consumer must hit the <strong>same worker</strong></td></tr>
+              </tbody></table></div>
+              <p class="mt-2 text-[11px] text-slate-500 dark:text-slate-400"><strong>Deliverable:</strong> “SAPI=FPM, 8.4.26, unpatched, <code class="font-mono">memory_limit=256M</code>, multipart accepted, upload progress on, workers long-lived → advisory preconditions present; exploitation not tested.”</p>
+            </div></li>
+            <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500 text-xs font-bold text-white">6</span><div class="min-w-0 flex-1">
+              <p class="font-bold text-slate-900 dark:text-white">Reproduce in a safe twin of the stack — never on production.</p>
+              <p class="mt-1">Use this lab as the twin, loopback only. Follow the per-CVE workbooks: identify the exact source revision and vendor regression test, build a <strong>separate diagnostic image</strong> with symbols + sanitizer (the release image has none), bound memory/time, use synthetic markers only, and repeat against a verified patched image with identical config.</p>
+              <div class="mt-2 overflow-x-auto rounded-xl bg-slate-950 p-3 font-mono text-[11px] text-slate-200">
+                <p>docker build --build-arg PHP_IMAGE='php:8.4.26-fpm-alpine' -t php2shell-investigation ./php2shell-lab</p>
+                <p>docker run -d --name php2shell-investigation --memory=256m --cpus=1 \</p>
+                <p>&nbsp;&nbsp;-p 127.0.0.1:8080:80 php2shell-investigation</p>
+                <p>python3 cve-demonstrations/collect_runtime.py --port 8080 &gt; baseline.json</p>
+                <p>docker logs --timestamps php2shell-investigation &gt; baseline-container.log 2&gt;&amp;1</p>
+                <p>docker inspect php2shell-investigation &gt; baseline-container-inspect.json</p>
+              </div>
+              <div class="mt-2 rounded-xl border border-rose-300/50 bg-rose-50 px-3 py-2 text-[11px] leading-relaxed text-rose-900 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200"><strong>Not evidence:</strong> a normal <code class="font-mono">Allowed memory size exhausted</code> error, an OOM-killed container, HTTP 500, worker segfault, matching response text, or persisted session data. A memory disclosure is not automatically RCE. With only those, report <strong>“not reproduced / insufficient evidence”</strong>.</div>
+              <p class="mt-2 text-[11px] text-slate-500 dark:text-slate-400">For 619: pin one worker (<code class="font-mono">pm=static, pm.max_children=1, pm.max_requests=0</code>), log worker PIDs, confirm request A and B hit the same PID, add a fresh-worker control, then repeat on the patched image.</p>
+            </div></li>
+          </ol>
+        </div>
+
+        <!-- ── Phase C ── -->
+        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white">Phase C — Prove, report, retest <span class="ml-1 font-mono text-xs font-normal text-slate-400">steps 7–10</span></h3>
+          <ol class="mt-4 space-y-5 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
+            <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">7</span><div class="min-w-0 flex-1">
+              <p class="font-bold text-slate-900 dark:text-white">Label your claim with an evidence ladder.</p>
+              <div class="mt-2 overflow-x-auto"><table class="w-full text-left text-[11px]"><thead class="uppercase tracking-wider text-slate-400"><tr><th class="py-1.5">Tier</th><th class="py-1.5">What you have</th><th class="py-1.5">Honest claim</th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                <tr><td class="py-1.5 font-mono">L0</td><td class="py-1.5">.php URL / PHPSESSID / X-Powered-By only</td><td class="py-1.5">PHP likely present; version unknown</td></tr>
+                <tr><td class="py-1.5 font-mono">L1</td><td class="py-1.5">version string / package below fixed milestone</td><td class="py-1.5"><strong>Potentially affected</strong>; backport unverified</td></tr>
+                <tr><td class="py-1.5 font-mono">L2</td><td class="py-1.5">L1 + SAPI + patch status + attack requirements</td><td class="py-1.5"><strong>Likely exposed</strong>; no exploit attempted</td></tr>
+                <tr><td class="py-1.5 font-mono">L3</td><td class="py-1.5">+ sanitizer/debugger trace tied to source revision + patched control</td><td class="py-1.5">Confirmed defect in this build</td></tr>
+                <tr><td class="py-1.5 font-mono">L4</td><td class="py-1.5">+ full demonstrated code-execution chain</td><td class="py-1.5">Confirmed RCE — isolated lab only</td></tr>
+              </tbody></table></div>
+              <p class="mt-2 text-[11px] text-slate-500 dark:text-slate-400">Most engagements end at <strong>L2</strong> — for a critical pre-auth engine bug that is plenty to prioritise patching. Never present L1 as L4.</p>
+            </div></li>
+            <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">8</span><div class="min-w-0 flex-1">
+              <p class="font-bold text-slate-900 dark:text-white">Hunt for past abuse if the host was unpatched after 21 Oct 2026.</p>
+              <div class="mt-2 overflow-x-auto rounded-xl bg-slate-950 p-3 font-mono text-[11px] text-slate-200">
+                <p class="text-slate-400"># PHP/FPM error logs: OOM, timeouts, early diagnostics, crashes</p>
+                <p>grep -iE 'Allowed memory size exhausted|Unknown on line 0|Maximum execution time exceeded|SIGSEGV|signal 11|PHP (Warning|Deprecated|Fatal)' /var/log/php*-fpm.log /var/log/nginx/error.log</p>
+                <p>journalctl --since '2026-10-20' | grep -iE 'php-fpm.*(segfault|core|exited)'</p>
+                <p class="text-slate-400"># Access logs + EDR: upload-progress probes, worker spawning a shell</p>
+                <p>grep -iE 'PHP_SESSION_UPLOAD_PROGRESS|multipart/form-data' /var/log/nginx/access.log | head</p>
+              </div>
+              <p class="mt-2 text-[11px] text-slate-500 dark:text-slate-400"><strong>Highest-value signal:</strong> a PHP worker (<code class="font-mono">php-fpm</code>, <code class="font-mono">php-cgi</code>, <code class="font-mono">httpd</code>) spawning <code class="font-mono">sh/bash/curl/wget/nc/python</code>. CISA published a SIGMA rule for exactly this and recommends monitoring worker processes. Enable <code class="font-mono">log_errors=On</code>, <code class="font-mono">error_reporting=E_ALL</code>, <code class="font-mono">catch_workers_output=yes</code> so the evidence exists.</p>
+            </div></li>
+            <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">9</span><div class="min-w-0 flex-1">
+              <p class="font-bold text-slate-900 dark:text-white">Write the finding so someone else can reproduce your conclusion.</p>
+              <div class="mt-2 overflow-x-auto rounded-xl bg-slate-950 p-3 font-mono text-[11px] leading-relaxed text-slate-200">
+                <p class="text-slate-400"># Report skeleton — full template in the companion workbook</p>
+                <p>Title: Unpatched PHP engine on &lt;asset&gt; — CVE-2026-109618 / -109619</p>
+                <p>Severity: Critical 9.2 (CVSS v4.0 AV:N/AC:H/AT:P/PR:N/UI:N/VC:H/VI:H/VA:H)</p>
+                <p>Asset + owner + exposure + image/package digest</p>
+                <p>Evidence tier: L1 | L2 | L3 (state which, and why)</p>
+                <p>Build + SAPI + how observed (command, response, timestamp)</p>
+                <p>Backport check reference (vendor changelog)</p>
+                <p>Effective config: memory_limit, post_max_size, upload progress,</p>
+                <p>&nbsp;&nbsp;fatal_error_backtraces, per-request INI, pm.max_requests</p>
+                <p>Log/EDR hunt result + time window · lab reproduction result</p>
+                <p>Impact: pre-auth RCE possible per vendor advisory;</p>
+                <p>&nbsp;&nbsp;EXPLOITABILITY NOT TESTED on this asset (if true)</p>
+                <p>Caveats: banners can be spoofed; backports change patch status;</p>
+                <p>&nbsp;&nbsp;a crash/500 does not prove RCE</p>
+                <p>Fix: 8.5.12/8.4.27/8.3.36/8.2.35 or vendor package + restart workers</p>
+                <p>Temporary (NOT a fix): memory_limit=-1, low post_max_size + front-end</p>
+                <p>&nbsp;&nbsp;caps, session.upload_progress.enabled=0, PHP 8.5</p>
+                <p>&nbsp;&nbsp;fatal_error_backtraces=0, no RLIMIT_AS/RLIMIT_DATA</p>
+              </div>
+            </div></li>
+            <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">10</span><div class="min-w-0 flex-1">
+              <p class="font-bold text-slate-900 dark:text-white">Retest after patching and close with evidence.</p>
+              <ul class="mt-2 grid gap-1.5 sm:grid-cols-2 list-none pl-0 text-[11px] text-slate-600 dark:text-slate-400">
+                <li>☐ New version + image digest recorded</li><li>☐ All PHP workers restarted (check start times)</li>
+                <li>☐ <code class="font-mono">php -i</code> / <code class="font-mono">php-fpm -tt</code> re-read for the web SAPI</li><li>☐ Temporary mitigations kept or removed with rationale</li>
+                <li>☐ Embedded/appliance PHP in separate vendor tickets</li><li>☐ Detection rules deployed and log visibility verified</li>
+                <li>☐ Identical workbook steps re-run on the patched build</li><li>☐ Finding closed with evidence, or re-opened with a reason</li>
+              </ul>
+            </div></li>
+          </ol>
+        </div>
+
+        <!-- practice + mistakes + sources -->
+        <div class="grid gap-4 lg:grid-cols-2">
+          <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white">Practice path — 10 exercises in this lab</h3>
+            <ol class="mt-3 list-decimal space-y-1.5 pl-5 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+              <li>Write the detection hypothesis from the primary sources.</li>
+              <li>Fingerprint the lab twice (headers + <code class="font-mono">?api=ping</code>).</li>
+              <li>Inventory your own machine (images, Dockerfiles, packages).</li>
+              <li>Build 8.4.26 <em>and</em> 8.4.27; record both digests.</li>
+              <li>Read effective config inside the container (<code class="font-mono">php -i</code>, <code class="font-mono">nginx -T</code>).</li>
+              <li>Assign an evidence tier to a version-only observation.</li>
+              <li>Write the report from the step-9 template.</li>
+              <li>Hunt <code class="font-mono">docker logs</code> and nginx logs; explain why an OOM error is not proof.</li>
+              <li>Repeat the workbook steps on the patched image.</li>
+              <li>Teach the 10-step loop back to a teammate.</li>
+            </ol>
+            <p class="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500 dark:bg-slate-800/60 dark:text-slate-400"><strong>Beginner traps:</strong> trusting <code class="font-mono">X-Powered-By</code> alone; forgetting distro backports; testing only the CLI SAPI; copying a public PoC into a client environment; calling a crash/500/memory leak “RCE”; forgetting same-worker PID correlation for 619; not restarting workers after patching.</p>
+          </div>
+          <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white">Primary sources — start here, not with blogs</h3>
+            <ul class="mt-3 space-y-2 text-xs leading-relaxed">
+              <li><a class="font-mono text-indigo-600 hover:underline dark:text-indigo-400" href="https://www.php.net/archive/2026.php#2026-10-21-5" target="_blank" rel="noopener noreferrer">php.net/archive/2026.php#2026-10-21-5</a> — official PHP security advisory and mitigations</li>
+              <li><a class="font-mono text-indigo-600 hover:underline dark:text-indigo-400" href="https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w" target="_blank" rel="noopener noreferrer">GHSA-w8hw-w9fx-j79w</a> — CVE-2026-109618 (OOM corruption)</li>
+              <li><a class="font-mono text-indigo-600 hover:underline dark:text-indigo-400" href="https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp" target="_blank" rel="noopener noreferrer">GHSA-6wmf-4rv5-p3rp</a> — CVE-2026-109619 (stale global state)</li>
+              <li><a class="font-mono text-indigo-600 hover:underline dark:text-indigo-400" href="https://www.cve.org/CVERecord?id=CVE-2026-109618" target="_blank" rel="noopener noreferrer">cve.org/CVERecord?id=CVE-2026-109618</a> · <a class="font-mono text-indigo-600 hover:underline dark:text-indigo-400" href="https://www.cve.org/CVERecord?id=CVE-2026-109619" target="_blank" rel="noopener noreferrer">…-109619</a></li>
+              <li><a class="font-mono text-indigo-600 hover:underline dark:text-indigo-400" href="https://www.cisa.gov/news-events/alerts/2026/10/21/critical-vulnerabilities-php-require-immediate-patching" target="_blank" rel="noopener noreferrer">CISA alert</a> + <a class="font-mono text-indigo-600 hover:underline dark:text-indigo-400" href="https://github.com/cisagov/SIGMA_Rules" target="_blank" rel="noopener noreferrer">SIGMA rules</a> — detection hunting</li>
+              <li><a class="font-mono text-indigo-600 hover:underline dark:text-indigo-400" href="https://github.com/NCSC-NL/php2shell" target="_blank" rel="noopener noreferrer">NCSC-NL/php2shell</a> — inventory, affected products, detection material</li>
+              <li><a class="font-mono text-indigo-600 hover:underline dark:text-indigo-400" href="https://cert.europa.eu/publications/security-advisories/2026-018" target="_blank" rel="noopener noreferrer">CERT-EU 2026-018</a> — coordinated disclosure timeline</li>
+            </ul>
+            <p class="mt-3 text-[11px] text-slate-500 dark:text-slate-400">External links need internet; the lab itself stays air-gapped. Companion workbook: <code class="font-mono text-slate-600 dark:text-slate-300">cve-demonstrations/REAL-WORLD-TESTER-GUIDE.md</code>.</p>
+          </div>
         </div>
       </div>
     </section>
@@ -1542,7 +1770,7 @@ window.__BOOT__ = <?= json_encode($boot, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) 
     // support ?view=lab&tab=cve618 deep link
     var qs = new URLSearchParams(window.location.search);
     var initial = qs.get('tab') || 'overview';
-    if (qs.get('view') === 'lab') { show('lab'); activate(['overview','cve618','cve619','verify'].indexOf(initial) !== -1 ? initial : 'overview'); }
+    if (qs.get('view') === 'lab') { show('lab'); activate(['overview','cve618','cve619','verify','field'].indexOf(initial) !== -1 ? initial : 'overview'); }
   })();
 
   /* ── canvas chart engine ───────────────────────────────── */
