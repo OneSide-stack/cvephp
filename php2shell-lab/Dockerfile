@@ -41,6 +41,11 @@ COPY php2shell.ini    /usr/local/etc/php/conf.d/90-php2shell.ini
 # ── application bundle: the complete UI (HTML + CSS + JS + PHP API) ships
 #    as a single functional index.php in /var/www/html ──────────────────────
 COPY --chown=www-data:www-data index.php /var/www/html/index.php
+# Walkthrough for beginner-friendly Solution tab (rendered inside the app)
+# This file is bundled so the Solution → Walkthrough tab can render it live.
+# Build from inside php2shell-lab/: `docker build -t php2shell-lab:8.4.26 .`
+# (the build context is this folder, so WALKTHROUGH.md must be present here).
+COPY WALKTHROUGH.md /var/www/html/WALKTHROUGH.md
 
 # runtime dirs, permissions, log destinations
 RUN mkdir -p /var/log/supervisor /var/log/nginx /var/lib/nginx/tmp /run \

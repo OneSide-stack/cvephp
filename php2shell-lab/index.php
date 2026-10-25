@@ -99,6 +99,176 @@ function delta_html(float $d, bool $invert = false): string
     return '<span class="font-semibold ' . $cls . '">' . $arrow . ' ' . number_format(abs($d), 1) . '%</span>';
 }
 
+/* ===================================================== walkthrough === */
+
+/** Very small markdown → HTML for WALKTHROUGH.md (headings, lists, code, tables, details, links, bold, inline code). */
+function walkthrough_md_to_html(string $md): string
+{
+    // Split into lines, handle fenced code blocks first
+    $lines = explode("\n", $md);
+    $out = '';
+    $inCode = false;
+    $codeLang = '';
+    $codeBuf = '';
+    $inTable = false;
+    $tableRows = [];
+    $listStack = []; // stack of 'ul'|'ol'
+
+    $flushTable = function() use (&$out, &$inTable, &$tableRows) {
+        if (!$inTable || empty($tableRows)) { $inTable = false; $tableRows = []; return; }
+        $out .= '<div class="overflow-x-auto my-4 rounded-xl border border-slate-200 dark:border-slate-700"><table class="w-full text-left text-xs"><thead class="bg-slate-50 dark:bg-slate-800 text-[11px] uppercase tracking-wider text-slate-400"><tr>';
+        $header = $tableRows[0];
+        foreach ($header as $h) { $out .= '<th class="px-3 py-2 font-semibold">' . md_inline($h) . '</th>'; }
+        $out .= '</tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-800">';
+        for ($i = 2; $i < count($tableRows); $i++) { // skip separator row
+            $out .= '<tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">';
+            foreach ($tableRows[$i] as $c) { $out .= '<td class="px-3 py-2 text-slate-700 dark:text-slate-300">' . md_inline($c) . '</td>'; }
+            $out .= '</tr>';
+        }
+        $out .= '</tbody></table></div>';
+        $inTable = false; $tableRows = [];
+    };
+    $closeLists = function() use (&$out, &$listStack) {
+        while (!empty($listStack)) { $tag = array_pop($listStack); $out .= "</$tag>"; }
+    };
+
+    for ($i = 0; $i < count($lines); $i++) {
+        $line = $lines[$i];
+        $trim = trim($line);
+
+        // Fenced code block
+        if (preg_match('/^```(\w*)/', $trim, $m)) {
+            if (!$inCode) { $inCode = true; $codeLang = $m[1] ?? ''; $codeBuf = ''; $flushTable(); $closeLists(); }
+            else {
+                $inCode = false;
+                $out .= '<div class="my-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">'
+                    . '<div class="flex items-center justify-between bg-slate-50 px-4 py-2 dark:bg-slate-800"><span class="font-mono text-[11px] font-semibold text-slate-500">' . e($codeLang ?: 'bash') . '</span>'
+                    . '<button type="button" onclick="copyCode(this)" data-code="' . e($codeBuf) . '" class="copy-btn rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-indigo-300 hover:text-indigo-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300">Copy</button></div>'
+                    . '<pre class="overflow-x-auto bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-200"><code>' . e(rtrim($codeBuf)) . '</code></pre></div>';
+                $codeBuf = '';
+            }
+            continue;
+        }
+        if ($inCode) { $codeBuf .= $line . "\n"; continue; }
+
+        // Table detection: | ... | lines
+        if (preg_match('/^\|.*\|$/', $trim)) {
+            if (!$inTable) { $flushTable(); $inTable = true; $tableRows = []; }
+            $cells = array_map('trim', explode('|', trim($trim, '|')));
+            $tableRows[] = $cells;
+            // If next line isn't table, flush
+            $next = isset($lines[$i+1]) ? trim($lines[$i+1]) : '';
+            if (!preg_match('/^\|.*\|$/', $next)) { $flushTable(); }
+            continue;
+        }
+
+        if ($trim === '---' || $trim === '***' || $trim === '___') { $flushTable(); $closeLists(); $out .= '<hr class="my-6 border-slate-200 dark:border-slate-700">'; continue; }
+        if ($trim === '') { $flushTable(); continue; }
+
+        // Details/summary (keep as is but styled)
+        if (preg_match('/^<details>/i', $trim)) { $flushTable(); $closeLists(); $out .= '<details class="my-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/40">'; continue; }
+        if (preg_match('/^<\/details>/i', $trim)) { $out .= '</details>'; continue; }
+        if (preg_match('/^<summary>(.*)<\/summary>/i', $trim, $mm)) { $out .= '<summary class="cursor-pointer list-inside text-xs font-bold text-indigo-600 dark:text-indigo-400">' . md_inline($mm[1]) . '</summary>'; continue; }
+
+        // Headings
+        if (preg_match('/^(#{1,6})\s+(.*)$/', $trim, $mm)) {
+            $flushTable(); $closeLists();
+            $lvl = strlen($mm[1]);
+            $text = $mm[2];
+            // strip anchor {#...} if any
+            $id = strtolower(preg_replace('/[^a-z0-9]+/', '-', trim(strip_tags($text))));
+            $id = trim($id, '-');
+            $cls = $lvl === 1 ? 'mt-8 text-2xl font-bold tracking-tight text-slate-900 dark:text-white' : ($lvl === 2 ? 'mt-8 text-lg font-bold tracking-tight text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-2' : ($lvl === 3 ? 'mt-6 text-sm font-bold text-slate-900 dark:text-white' : 'mt-4 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300'));
+            $out .= "<h$lvl id=\"$id\" class=\"$cls\">" . md_inline($text) . "</h$lvl>";
+            continue;
+        }
+
+        // Blockquote
+        if (preg_match('/^>\s*(.*)$/', $trim, $mm)) {
+            $flushTable(); $closeLists();
+            $content = $mm[1];
+            // collect consecutive blockquotes
+            $bq = $content;
+            while ($i+1 < count($lines) && preg_match('/^>\s*(.*)$/', trim($lines[$i+1]), $mm2)) { $bq .= '<br>' . $mm2[1]; $i++; }
+            $out .= '<blockquote class="my-4 border-l-4 border-indigo-300 bg-indigo-50 px-4 py-3 text-xs leading-relaxed text-indigo-900 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-200">' . md_inline($bq) . '</blockquote>';
+            continue;
+        }
+
+        // Lists
+        if (preg_match('/^(\d+)\.\s+(.*)$/', $trim, $mm)) {
+            if (empty($listStack) || end($listStack) !== 'ol') { $flushTable(); $out .= '<ol class="my-3 list-decimal space-y-2 pl-5 text-xs leading-relaxed text-slate-700 dark:text-slate-300">'; $listStack[] = 'ol'; }
+            $out .= '<li>' . md_inline($mm[2]) . '</li>';
+            // close if next isn't list item
+            $next = isset($lines[$i+1]) ? trim($lines[$i+1]) : '';
+            if (!preg_match('/^(\d+)\.\s+/', $next) && !preg_match('/^[-*]\s+/', $next) && $next !== '') {
+                // keep open if next is indented continuation? simple: close on blank or non-list
+                if ($next === '' || !preg_match('/^[-*\d]/', $next)) { /* keep for now, will close on flush */ }
+            }
+            if ($next === '' || (!preg_match('/^(\d+)\.\s+/', $next) && !preg_match('/^[-*]\s+/', $next))) {
+                // peek further: if next blank then non-list, close
+            }
+            continue;
+        }
+        if (preg_match('/^[-*]\s+(.*)$/', $trim, $mm)) {
+            // checkbox variant
+            if (preg_match('/^\[ \]\s+(.*)$/', $mm[1], $mm2) || preg_match('/^\[x\]\s+(.*)$/i', $mm[1], $mm2)) {
+                if (empty($listStack) || end($listStack) !== 'ul') { $flushTable(); $out .= '<ul class="my-3 space-y-2 pl-1 text-xs leading-relaxed text-slate-700 dark:text-slate-300">'; $listStack[] = 'ul'; }
+                $checked = stripos($mm[1], '[x]') === 0 ? 'checked' : '';
+                $out .= '<li class="flex items-start gap-2"><input type="checkbox" class="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" ' . $checked . ' disabled><span>' . md_inline($mm2[1]) . '</span></li>';
+            } else {
+                if (empty($listStack) || end($listStack) !== 'ul') { $flushTable(); $out .= '<ul class="my-3 list-disc space-y-1.5 pl-5 text-xs leading-relaxed text-slate-700 dark:text-slate-300">'; $listStack[] = 'ul'; }
+                $out .= '<li>' . md_inline($mm[1]) . '</li>';
+            }
+            continue;
+        }
+
+        // Paragraph
+        $flushTable();
+        // close lists if next line is not a list and we have open lists and current line is not list continuation
+        if (!empty($listStack) && $trim !== '' && !preg_match('/^[-*\d]/', $trim)) {
+            // if this is paragraph, close lists before paragraph
+            $closeLists();
+        }
+        $out .= '<p class="my-3 text-xs leading-relaxed text-slate-700 dark:text-slate-300">' . md_inline($trim) . '</p>';
+    }
+    $closeLists();
+    return $out;
+}
+
+function md_inline(string $s): string
+{
+    // escape first, then restore markdown constructs
+    $s = htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    // inline code `code`
+    $s = preg_replace_callback('/`([^`]+)`/', function($m){ return '<code class="rounded bg-slate-100 px-1 py-0.5 font-mono text-[11px] text-slate-800 dark:bg-slate-800 dark:text-slate-200">' . $m[1] . '</code>'; }, $s);
+    // bold **text**
+    $s = preg_replace('/\*\*([^*]+)\*\*/', '<strong class="font-bold text-slate-900 dark:text-white">$1</strong>', $s);
+    // italic *text* or _text_
+    $s = preg_replace('/\*([^*]+)\*/', '<em>$1</em>', $s);
+    // links [text](url)
+    $s = preg_replace_callback('/\[([^\]]+)\]\(([^)]+)\)/', function($m){
+        $url = $m[2];
+        $text = $m[1];
+        $isExternal = str_starts_with($url, 'http');
+        $target = $isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
+        return '<a href="' . htmlspecialchars($url, ENT_QUOTES) . '"' . $target . ' class="font-medium text-indigo-600 hover:underline dark:text-indigo-400">' . $text . '</a>';
+    }, $s);
+    return $s;
+}
+
+function walkthrough_file_html(): string
+{
+    $candidates = [__DIR__ . '/../WALKTHROUGH.md', __DIR__ . '/WALKTHROUGH.md', '/var/www/html/WALKTHROUGH.md', 'WALKTHROUGH.md'];
+    $content = null;
+    foreach ($candidates as $p) {
+        if (is_file($p) && is_readable($p)) { $content = @file_get_contents($p); if ($content !== false) break; }
+    }
+    if ($content === null || trim($content) === '') {
+        return '<div class="rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">WALKTHROUGH.md not found in image. Rebuild with <code class="font-mono">COPY WALKTHROUGH.md /var/www/html/WALKTHROUGH.md</code> in Dockerfile, or view it in the repo at <code class="font-mono">WALKTHROUGH.md</code>. The beginner guide below still walks you through every step.</div>';
+    }
+    return walkthrough_md_to_html($content);
+}
+
 /* ====================================================== telemetry core === */
 
 /** Current deterministic (per 4-second bucket) telemetry snapshot. */
@@ -322,6 +492,21 @@ function stats_payload(): array
 }
 
 /* ===================================================== API  dispatch ===== */
+
+// Raw WALKTHROUGH.md download (for beginner tab and offline reading)
+if (isset($_GET['walkthrough']) && $_GET['walkthrough'] === 'raw') {
+    $candidates = [__DIR__ . '/../WALKTHROUGH.md', __DIR__ . '/WALKTHROUGH.md', '/var/www/html/WALKTHROUGH.md', 'WALKTHROUGH.md'];
+    foreach ($candidates as $p) {
+        if (is_file($p) && is_readable($p)) {
+            header('Content-Type: text/markdown; charset=utf-8');
+            header('Content-Disposition: inline; filename=\"WALKTHROUGH.md\"');
+            readfile($p);
+            exit;
+        }
+    }
+    http_response_code(404);
+    header('Content-Type: text/plain');
+    echo \"WALKTHROUGH.md not found in image. Rebuild with COPY WALKTHROUGH.md included.\";\n    exit;\n}
 
 $api = isset($_GET['api']) ? (string) $_GET['api'] : null;
 
@@ -1245,7 +1430,7 @@ $boot = [
               <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Built for <code class="rounded bg-slate-100 px-1 py-0.5 font-mono dark:bg-slate-800">php:8.4.26-fpm-alpine</code> (last 8.4 before patch). Fixed in 8.4.27 / 8.5.12 / 8.3.36 / 8.2.35. <span class="font-semibold">Never expose this container publicly.</span></p>
             </div>
             <div class="flex shrink-0 items-center gap-2">
-              <button type="button" onclick="document.querySelector('[data-lab-tab=overview]')?.click()" class="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-500">Start walkthrough</button>
+              <button type="button" onclick="document.querySelector('[data-lab-tab=walkthrough]')?.click()" class="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-500">📖 Beginner Walkthrough</button>
               <button type="button" onclick="document.querySelector('[data-lab-tab=field]')?.click()" class="rounded-lg border border-indigo-300 bg-white px-4 py-2 text-xs font-bold text-indigo-700 shadow-sm hover:bg-indigo-50 dark:border-indigo-500/40 dark:bg-slate-800 dark:text-indigo-300">Real-world guide</button>
               <a href="#" data-view="runtime" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">Check runtime</a>
             </div>
@@ -1278,6 +1463,7 @@ $boot = [
       <!-- tabs -->
       <div class="flex flex-wrap gap-2">
         <button type="button" data-lab-tab="overview" class="lab-tab rounded-full bg-indigo-600 px-4 py-1.5 text-xs font-bold text-white shadow-sm">Overview</button>
+        <button type="button" data-lab-tab="walkthrough" class="lab-tab rounded-full border border-emerald-300 bg-emerald-50 px-4 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">📖 Walkthrough <span class="ml-1 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] text-white">BEGINNER</span></button>
         <button type="button" data-lab-tab="cve618" class="lab-tab rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">CVE-2026-109618</button>
         <button type="button" data-lab-tab="cve619" class="lab-tab rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">CVE-2026-109619</button>
         <button type="button" data-lab-tab="verify" class="lab-tab rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Verify &amp; Patch Test</button>
@@ -1320,6 +1506,179 @@ supervisord = PID 1   docker logs -f php2shell-vm</pre>
             <li class="flex gap-3"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">6</span><span><strong>Compare patched:</strong> rebuild with <code class="font-mono">--build-arg PHP_IMAGE=php:8.4.27-fpm-alpine</code> (or 8.5.12 / 8.3.36 / 8.2.35) and repeat identical steps. Vulnerability should disappear; keep image digests and <code class="font-mono">docker inspect</code> with your evidence. <strong>A crash or 500 alone is not RCE.</strong></span></li>
           </ol>
           <div class="mt-4 rounded-xl border border-amber-400/40 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200"><strong>Rule:</strong> until you have a vendor advisory + fixing commit + sanitizer/debugger trace tied to the exact source revision, report <code class="font-mono">not reproduced / insufficient evidence</code>. Version strings alone cannot prove either bug (backported patches count). <button type="button" onclick="document.querySelector('[data-lab-tab=field]')?.click()" class="font-bold underline">Open the Real-World Hunt tab</button> for the 10-step tester workflow: inventory → fingerprint → backport check → attack requirements → evidence → report.</div>
+        </div>
+      </div>
+
+      <!-- ══ WALKTHROUGH (BEGINNER) panel — shows walkthrough.md rendered + interactive guide ══ -->
+      <div data-lab-panel="walkthrough" class="hidden space-y-6">
+        <!-- Beginner hero -->
+        <div class="overflow-hidden rounded-2xl border border-emerald-300 bg-gradient-to-br from-emerald-50 via-white to-indigo-50 shadow-sm dark:border-emerald-500/25 dark:from-emerald-500/10 dark:via-slate-900 dark:to-indigo-500/10">
+          <div class="px-6 py-6 sm:px-8 sm:py-7">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-bold text-white">🌱 BEGINNER FRIENDLY</span>
+              <span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1 text-[11px] font-bold text-white">WALKTHROUGH.MD</span>
+              <span class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-mono font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">12 Tasks · 90-120 min</span>
+              <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">No hacking experience needed</span>
+            </div>
+            <h2 class="mt-3 text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">📖 Complete Walkthrough — Find BOTH CVEs Step-by-Step</h2>
+            <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">This tab shows the full <code class="font-mono font-semibold">WALKTHROUGH.md</code> file rendered for the web — the same TryHackMe / Hack-The-Box style guide that lives in the repo. It’s been enhanced for beginners: plain-English explanations, copy buttons, progress tracking, and “what to do if stuck” tips. <strong>Follow it top-to-bottom and you will find both CVEs and solve the lab.</strong></p>
+            <div class="mt-4 flex flex-wrap gap-2">
+              <a href="?walkthrough=raw" target="_blank" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-500">📄 Open raw WALKTHROUGH.md</a>
+              <button type="button" onclick="document.getElementById('wt-content')?.scrollIntoView({behavior:'smooth'})" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">Jump to guide ↓</button>
+              <a href="#wt-beginner-map" class="rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300">See 12-step map</a>
+            </div>
+            <!-- progress bar -->
+            <div class="mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/60">
+              <div class="flex items-center justify-between">
+                <p class="text-xs font-bold text-slate-900 dark:text-white">Your progress</p>
+                <p class="text-xs text-slate-500"><span id="wt-progress-text">0 / 12 tasks</span> · <span id="wt-progress-pct">0%</span></p>
+              </div>
+              <div class="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+                <div id="wt-progress-bar" class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-indigo-600 transition-all duration-500" style="width: 0%"></div>
+              </div>
+              <p class="mt-2 text-[11px] text-slate-400">Check off tasks as you complete them — progress saves in your browser.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Beginner quick-start 3-column -->
+        <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div class="flex items-center gap-2">
+              <span class="grid h-8 w-8 place-items-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10">1</span>
+              <h3 class="text-sm font-bold text-slate-900 dark:text-white">What you’ll learn</h3>
+            </div>
+            <ul class="mt-3 space-y-1.5 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+              <li>✔️ How to spot PHP version &amp; patch status</li>
+              <li>✔️ What makes each CVE exploitable (config)</li>
+              <li>✔️ How to collect evidence professionals use</li>
+              <li>✔️ Why a crash ≠ a hack (evidence ladder L0-L4)</li>
+              <li>✔️ How to patch &amp; prove the fix</li>
+            </ul>
+          </div>
+          <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div class="flex items-center gap-2">
+              <span class="grid h-8 w-8 place-items-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/10">2</span>
+              <h3 class="text-sm font-bold text-slate-900 dark:text-white">You need (all free)</h3>
+            </div>
+            <ul class="mt-3 space-y-1.5 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+              <li>• Docker Desktop (install first)</li>
+              <li>• Terminal: <code class="font-mono">bash</code> / <code class="font-mono">zsh</code></li>
+              <li>• <code class="font-mono">curl</code>, <code class="font-mono">python3</code> (pre-installed on Mac/Linux)</li>
+              <li>• This lab on <code class="font-mono">127.0.0.1:8080</code> (loopback only)</li>
+              <li>• 15 min per task, no rushing</li>
+            </ul>
+          </div>
+          <div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 dark:border-rose-500/25 dark:bg-rose-500/10">
+            <div class="flex items-center gap-2">
+              <span class="grid h-8 w-8 place-items-center rounded-lg bg-white text-rose-600 dark:bg-slate-800">⚠️</span>
+              <h3 class="text-sm font-bold text-rose-900 dark:text-rose-200">Safety first</h3>
+            </div>
+            <ul class="mt-3 space-y-1.5 text-xs leading-relaxed text-rose-800/80 dark:text-rose-200/80">
+              <li>• Bind to <code class="font-mono">127.0.0.1</code> only — never <code class="font-mono">0.0.0.0</code></li>
+              <li>• Never test on sites you don’t own</li>
+              <li>• No exploit payloads needed to pass</li>
+              <li>• 500 / OOM = not RCE (you’ll learn why in Task 8)</li>
+              <li>• Delete container when done: <code class="font-mono">docker rm -f</code></li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- 12-step visual map -->
+        <div id="wt-beginner-map" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white">🗺️ The 12 tasks — your roadmap to solving the lab</h3>
+          <p class="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">Each task teaches one skill. Tasks 1-6 = find the bug, Tasks 7-8 = understand the bug deeply, Tasks 9-12 = report, detect, patch, and clean up. <strong>Complete Tasks 1-9 for a full solution (L2); Tasks 10-12 make you job-ready.</strong></p>
+          <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div class="group rounded-xl border border-slate-200 p-3 hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-700 dark:hover:bg-emerald-500/5"><p class="text-xs font-bold text-slate-900 dark:text-white"><span class="mr-1 rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] text-white">1</span> Start & verify</p><p class="mt-1 text-[11px] leading-relaxed text-slate-500">Is the lab running? Check healthz + ping + supervisord. ✅ Checkpoint: 4×200 codes.</p></div>
+            <div class="group rounded-xl border border-slate-200 p-3 hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-700 dark:hover:bg-emerald-500/5"><p class="text-xs font-bold text-slate-900 dark:text-white"><span class="mr-1 rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] text-white">2</span> Black-box recon</p><p class="mt-1 text-[11px] leading-relaxed text-slate-500">What does the internet see? Headers leak PHP version. Draw nginx→FPM map.</p></div>
+            <div class="group rounded-xl border border-slate-200 p-3 hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-700 dark:hover:bg-emerald-500/5"><p class="text-xs font-bold text-slate-900 dark:text-white"><span class="mr-1 rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] text-white">3</span> Fingerprint engine</p><p class="mt-1 text-[11px] leading-relaxed text-slate-500"><strong>Key:</strong> 8.4.26 fpm-fcgi vs cli. Record base digest + image ID.</p></div>
+            <div class="group rounded-xl border border-slate-200 p-3 hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-700 dark:hover:bg-emerald-500/5"><p class="text-xs font-bold text-slate-900 dark:text-white"><span class="mr-1 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] text-white">4</span> Patch triage</p><p class="mt-1 text-[11px] leading-relaxed text-slate-500">Is 8.4.26 before the fix? Yes: 8.4.27 is patched. Learn GHSA→CVE mapping.</p></div>
+            <div class="group rounded-xl border border-slate-200 p-3 hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-700 dark:hover:bg-emerald-500/5"><p class="text-xs font-bold text-slate-900 dark:text-white"><span class="mr-1 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] text-white">5</span> Attack requirements</p><p class="mt-1 text-[11px] leading-relaxed text-slate-500"><code class="font-mono">memory_limit</code>, <code class="font-mono">post_max_size</code>, <code class="font-mono">upload_progress</code>, workers — can attacker reach the bug?</p></div>
+            <div class="group rounded-xl border border-slate-200 p-3 hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-700 dark:hover:bg-emerald-500/5"><p class="text-xs font-bold text-slate-900 dark:text-white"><span class="mr-1 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] text-white">6</span> Baseline evidence</p><p class="mt-1 text-[11px] leading-relaxed text-slate-500">Run <code class="font-mono">collect_runtime.py</code> → baseline.json + hashes. This is your proof.</p></div>
+            <div class="group rounded-xl border border-slate-200 p-3 hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-700 dark:hover:bg-emerald-500/5"><p class="text-xs font-bold text-slate-900 dark:text-white"><span class="mr-1 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] text-white">7</span> Worker lifecycle</p><p class="mt-1 text-[11px] leading-relaxed text-slate-500">Pin 1 worker, watch PIDs. <strong>Same PID = CVE-2026-109619 works.</strong></p></div>
+            <div class="group rounded-xl border border-slate-200 p-3 hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-700 dark:hover:bg-emerald-500/5"><p class="text-xs font-bold text-slate-900 dark:text-white"><span class="mr-1 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] text-white">8</span> OOM control</p><p class="mt-1 text-[11px] leading-relaxed text-slate-500">Trigger memory_limit on BOTH builds → same 500. So 500 ≠ exploit!</p></div>
+            <div class="group rounded-xl border border-slate-200 p-3 hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-700 dark:hover:bg-emerald-500/5"><p class="text-xs font-bold text-slate-900 dark:text-white"><span class="mr-1 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] text-white">9</span> Write L2 report</p><p class="mt-1 text-[11px] leading-relaxed text-slate-500">One-page finding: asset + patch status + config + caveats + fix.</p></div>
+            <div class="group rounded-xl border border-slate-200 p-3 hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-700 dark:hover:bg-emerald-500/5"><p class="text-xs font-bold text-slate-900 dark:text-white"><span class="mr-1 rounded-full bg-slate-600 px-2 py-0.5 text-[10px] text-white">10</span> Detection hunt</p><p class="mt-1 text-[11px] leading-relaxed text-slate-500">Grep logs. Best signal: PHP worker → shell.</p></div>
+            <div class="group rounded-xl border border-slate-200 p-3 hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-700 dark:hover:bg-emerald-500/5"><p class="text-xs font-bold text-slate-900 dark:text-white"><span class="mr-1 rounded-full bg-slate-600 px-2 py-0.5 text-[10px] text-white">11</span> Patch & retest</p><p class="mt-1 text-[11px] leading-relaxed text-slate-500">Rebuild 8.4.27, restart workers, re-run all checks.</p></div>
+            <div class="group rounded-xl border border-slate-200 p-3 hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-700 dark:hover:bg-emerald-500/5"><p class="text-xs font-bold text-slate-900 dark:text-white"><span class="mr-1 rounded-full bg-slate-600 px-2 py-0.5 text-[10px] text-white">12</span> Teardown</p><p class="mt-1 text-[11px] leading-relaxed text-slate-500">Remove vulnerable image. No trace left.</p></div>
+          </div>
+        </div>
+
+        <!-- How to find BOTH CVEs — beginner summary -->
+        <div class="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+          <h3 class="text-sm font-bold text-indigo-900 dark:text-indigo-200">🎯 How you find BOTH CVEs (beginner summary before diving in)</h3>
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            <div class="rounded-xl bg-white p-4 dark:bg-slate-800">
+              <p class="text-xs font-bold text-indigo-900 dark:text-indigo-200">CVE-2026-109618 — OOM corruption <span class="ml-1 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700 dark:bg-indigo-500/20">Task 4 + 5 + 8</span></p>
+              <ul class="mt-2 list-disc space-y-1 pl-4 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+                <li><strong>In plain English:</strong> PHP gets a huge upload, runs out of memory, and “forgets” to clean up. Next thing it does uses dirty memory → RCE.</li>
+                <li><strong>How you find it:</strong> You prove <code class="font-mono">PHP 8.4.26 &lt; 8.4.27</code> + <code class="font-mono">fpm-fcgi</code> + <code class="font-mono">memory_limit=256M</code> + multipart allowed (24M). That’s L2. You show a normal OOM error happens on BOTH versions — so you don’t over-claim. Real L3 needs a sanitizer trace (advanced).</li>
+                <li><strong>Your proof in lab:</strong> Task 5’s <code class="font-mono">memory_limit</code> line + Task 8’s identical 500 on both builds.</li>
+              </ul>
+            </div>
+            <div class="rounded-xl bg-white p-4 dark:bg-slate-800">
+              <p class="text-xs font-bold text-rose-900 dark:text-rose-200">CVE-2026-109619 — Stale global <span class="ml-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700 dark:bg-rose-500/20">Task 4 + 5 + 7</span></p>
+              <ul class="mt-2 list-disc space-y-1 pl-4 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+                <li><strong>In plain English:</strong> PHP frees memory but leaves a pointer. Next request on the <em>same worker</em> uses the old pointer → leak / RCE.</li>
+                <li><strong>How you find it:</strong> You prove <code class="font-mono">8.4.26</code> + <code class="font-mono">fpm-fcgi</code> + <code class="font-mono">session.upload_progress.enabled=On</code> + <code class="font-mono">pm.max_requests=0</code> (workers never recycle). That’s L2 and FPM-validated!</li>
+                <li><strong>Your proof in lab:</strong> Task 7 — pin 1 worker, show same PID, show fresh-worker control breaks it.</li>
+              </ul>
+            </div>
+          </div>
+          <p class="mt-3 rounded-lg bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 dark:bg-slate-800 dark:text-slate-300"><strong>Rule for both:</strong> No exploit needed! A clean L2 report (“likely exposed — version + SAPI + attack requirements present, no exploit tested”) is enough to force an emergency patch. That’s how you solve the lab as a beginner.</p>
+        </div>
+
+        <!-- Interactive checklist for 12 tasks -->
+        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div class="flex flex-wrap items-center gap-2">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white">✅ Interactive checklist — track your 12 tasks</h3>
+            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">saves automatically</span>
+            <button type="button" onclick="wtReset()" class="ml-auto rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">Reset</button>
+          </div>
+          <div class="mt-4 grid gap-2 sm:grid-cols-2">
+            <label class="flex items-center gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50"><input type="checkbox" data-wt="1" class="h-4 w-4 rounded border-slate-300 text-emerald-600"><span class="text-xs"><strong>Task 1</strong> — Lab is running (4×200, supervisord)</span></label>
+            <label class="flex items-center gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50"><input type="checkbox" data-wt="2" class="h-4 w-4 rounded border-slate-300 text-emerald-600"><span class="text-xs"><strong>Task 2</strong> — Drew nginx→FPM map + headers</span></label>
+            <label class="flex items-center gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50"><input type="checkbox" data-wt="3" class="h-4 w-4 rounded border-slate-300 text-emerald-600"><span class="text-xs"><strong>Task 3</strong> — Fingerprint 8.4.26 fpm-fcgi + digests</span></label>
+            <label class="flex items-center gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50"><input type="checkbox" data-wt="4" class="h-4 w-4 rounded border-slate-300 text-emerald-600"><span class="text-xs"><strong>Task 4</strong> — Patch triage: 8.4.26 unpatched</span></label>
+            <label class="flex items-center gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50"><input type="checkbox" data-wt="5" class="h-4 w-4 rounded border-slate-300 text-emerald-600"><span class="text-xs"><strong>Task 5</strong> — Attack requirements mapped</span></label>
+            <label class="flex items-center gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50"><input type="checkbox" data-wt="6" class="h-4 w-4 rounded border-slate-300 text-emerald-600"><span class="text-xs"><strong>Task 6</strong> — Baseline collector + hashes</span></label>
+            <label class="flex items-center gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50"><input type="checkbox" data-wt="7" class="h-4 w-4 rounded border-slate-300 text-emerald-600"><span class="text-xs"><strong>Task 7</strong> — Same-PID vs recycled worker</span></label>
+            <label class="flex items-center gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50"><input type="checkbox" data-wt="8" class="h-4 w-4 rounded border-slate-300 text-emerald-600"><span class="text-xs"><strong>Task 8</strong> — OOM on both builds = not proof</span></label>
+            <label class="flex items-center gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50"><input type="checkbox" data-wt="9" class="h-4 w-4 rounded border-slate-300 text-emerald-600"><span class="text-xs"><strong>Task 9</strong> — L2 report written</span></label>
+            <label class="flex items-center gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50"><input type="checkbox" data-wt="10" class="h-4 w-4 rounded border-slate-300 text-emerald-600"><span class="text-xs"><strong>Task 10</strong> — Log hunt / detection</span></label>
+            <label class="flex items-center gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50"><input type="checkbox" data-wt="11" class="h-4 w-4 rounded border-slate-300 text-emerald-600"><span class="text-xs"><strong>Task 11</strong> — Patch to 8.4.27 + retest</span></label>
+            <label class="flex items-center gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50"><input type="checkbox" data-wt="12" class="h-4 w-4 rounded border-slate-300 text-emerald-600"><span class="text-xs"><strong>Task 12</strong> — Teardown, no trace left</span></label>
+          </div>
+        </div>
+
+        <!-- Full WALKTHROUGH.md rendered -->
+        <div class="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900 dark:text-white">📄 WALKTHROUGH.md — full guide (rendered)</h3>
+              <p class="text-[11px] text-slate-400">This is the exact <code class="font-mono">WALKTHROUGH.md</code> from the repo, rendered with beginner styling. Use the table of contents to jump.</p>
+            </div>
+            <div class="flex gap-2">
+              <a href="?walkthrough=raw" target="_blank" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Raw markdown</a>
+              <button type="button" onclick="document.getElementById('wt-content')?.scrollTo({top:0,behavior:'smooth'})" class="rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-slate-700 dark:bg-white dark:text-slate-900">Back to top ↑</button>
+            </div>
+          </div>
+          <div id="wt-content" class="scroll-thin max-h-[70vh] overflow-y-auto px-6 py-6">
+            <?= walkthrough_file_html() ?>
+          </div>
+        </div>
+
+        <!-- Beginner glossary quick ref -->
+        <div class="rounded-2xl border border-amber-300 bg-amber-50 p-5 dark:border-amber-500/20 dark:bg-amber-500/10">
+          <h3 class="text-sm font-bold text-amber-900 dark:text-amber-200">📚 Quick glossary — hover any term in the guide</h3>
+          <div class="mt-3 grid gap-2 sm:grid-cols-2 text-xs leading-relaxed text-amber-900/80 dark:text-amber-200/80">
+            <p><strong>CVE</strong> = ID for a bug. <strong>CVSS</strong> = severity score. <strong>RCE</strong> = attacker runs code.</p>
+            <p><strong>SAPI</strong> = how PHP runs: fpm-fcgi (web), cli (terminal). Need web SAPI.</p>
+            <p><strong>Docker</strong> = sandbox computer. <strong>nginx</strong> = front door. <strong>PHP-FPM</strong> = PHP workers.</p>
+            <p><strong>memory_limit</strong> = max per request. <strong>post_max_size</strong> = max upload size.</p>
+            <p><strong>pm.max_requests</strong> = when to recycle worker. 0 = never (good for 109619).</p>
+            <p><strong>L2</strong> = “likely exposed” — your goal. <strong>L4</strong> = full hack — not needed.</p>
+          </div>
         </div>
       </div>
 
@@ -1766,18 +2125,111 @@ window.__BOOT__ = <?= json_encode($boot, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) 
     if (!tabs.length) return;
     var LAB_ACTIVE = 'lab-tab rounded-full bg-indigo-600 px-4 py-1.5 text-xs font-bold text-white shadow-sm';
     var LAB_IDLE   = 'lab-tab rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300';
+    var WALK_ACTIVE = 'lab-tab rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white shadow-sm';
+    var WALK_IDLE   = 'lab-tab rounded-full border border-emerald-300 bg-emerald-50 px-4 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300';
+    var FIELD_ACTIVE = 'lab-tab rounded-full bg-indigo-600 px-4 py-1.5 text-xs font-bold text-white shadow-sm';
+    var FIELD_IDLE   = 'lab-tab rounded-full border border-indigo-300 bg-indigo-50 px-4 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300';
+    function idleFor(name) {
+      if (name === 'walkthrough') return WALK_IDLE;
+      if (name === 'field') return FIELD_IDLE;
+      return LAB_IDLE;
+    }
+    function activeFor(name) {
+      if (name === 'walkthrough') return WALK_ACTIVE;
+      if (name === 'field') return FIELD_ACTIVE;
+      return LAB_ACTIVE;
+    }
     function activate(name) {
-      tabs.forEach(function (b) { b.className = b.dataset.labTab === name ? LAB_ACTIVE : LAB_IDLE; });
+      tabs.forEach(function (b) {
+        var n = b.dataset.labTab;
+        b.className = n === name ? activeFor(n) : idleFor(n);
+      });
       panels.forEach(function (p) { p.classList.toggle('hidden', p.dataset.labPanel !== name); });
     }
     tabs.forEach(function (b) {
       b.addEventListener('click', function () { activate(b.dataset.labTab); });
     });
-    // support ?view=lab&tab=cve618 deep link
+    // support ?view=lab&tab=walkthrough deep link
     var qs = new URLSearchParams(window.location.search);
     var initial = qs.get('tab') || 'overview';
-    if (qs.get('view') === 'lab') { show('lab'); activate(['overview','cve618','cve619','verify','field'].indexOf(initial) !== -1 ? initial : 'overview'); }
+    var validTabs = ['overview','walkthrough','cve618','cve619','verify','field'];
+    if (qs.get('view') === 'lab') { show('lab'); activate(validTabs.indexOf(initial) !== -1 ? initial : 'overview'); }
+    // expose for hero buttons
+    window.activateLabTab = activate;
   })();
+
+  /* ── walkthrough progress + copy helpers ───────────────── */
+  function wtUpdate() {
+    var boxes = document.querySelectorAll('[data-wt]');
+    var total = boxes.length, done = 0;
+    boxes.forEach(function(c){ if(c.checked) done++; });
+    var pct = total ? Math.round(done/total*100) : 0;
+    var bar = document.getElementById('wt-progress-bar');
+    var txt = document.getElementById('wt-progress-text');
+    var pctEl = document.getElementById('wt-progress-pct');
+    if (bar) bar.style.width = pct + '%';
+    if (txt) txt.textContent = done + ' / ' + total + ' tasks';
+    if (pctEl) pctEl.textContent = pct + '%';
+    // confetti when all done
+    if (done === total && total > 0) {
+      if (!window._wtDone) { window._wtDone = true; try { toast('🎉 All 12 tasks complete! You solved the lab. Now write your L2 report!'); } catch(e){} }
+    } else { window._wtDone = false; }
+  }
+  function wtLoad() {
+    try {
+      var data = JSON.parse(localStorage.getItem('wt-progress') || '{}');
+      document.querySelectorAll('[data-wt]').forEach(function(c){
+        var k = c.getAttribute('data-wt');
+        if (data[k]) c.checked = true;
+      });
+    } catch(e){}
+    wtUpdate();
+  }
+  function wtSave() {
+    var data = {};
+    document.querySelectorAll('[data-wt]').forEach(function(c){
+      data[c.getAttribute('data-wt')] = c.checked;
+    });
+    try { localStorage.setItem('wt-progress', JSON.stringify(data)); } catch(e){}
+    wtUpdate();
+  }
+  function wtReset() {
+    document.querySelectorAll('[data-wt]').forEach(function(c){ c.checked = false; });
+    try { localStorage.removeItem('wt-progress'); } catch(e){}
+    wtUpdate();
+    toast('Progress reset');
+  }
+  // expose globally for inline handlers
+  window.wtReset = wtReset;
+  window.wtUpdate = wtUpdate;
+  window.wtSave = wtSave;
+  document.addEventListener('DOMContentLoaded', function(){
+    document.querySelectorAll('[data-wt]').forEach(function(c){
+      c.addEventListener('change', wtSave);
+    });
+    wtLoad();
+  });
+  // run now in case DOM already loaded
+  wtLoad();
+  document.querySelectorAll('[data-wt]').forEach(function(c){ c.addEventListener('change', wtSave); });
+
+  function copyCode(btn) {
+    var raw = btn.getAttribute('data-code') || '';
+    // fallback: try to find next pre code
+    if (!raw) {
+      var pre = btn.closest('div')?.nextElementSibling?.querySelector('code');
+      if (pre) raw = pre.textContent;
+    }
+    navigator.clipboard.writeText(raw).then(function(){
+      var orig = btn.textContent;
+      btn.textContent = 'Copied ✓';
+      setTimeout(function(){ btn.textContent = orig; }, 1200);
+      toast('Copied to clipboard');
+    }).catch(function(){
+      toast('Copy failed — select manually');
+    });
+  }
+  window.copyCode = copyCode;
 
   /* ── deep links for the other views: ?view=runtime etc. ── */
   (function () {

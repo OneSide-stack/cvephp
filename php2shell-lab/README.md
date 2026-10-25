@@ -39,8 +39,9 @@ expected output, hidden answers, a full answer key, an evidence-collection
 workflow and the report you should be able to write at the end. Start there if
 you want a step-by-step solution rather than open-ended analysis.
 
-The **Solution** view in the app has five tabs: *Overview* (walkthrough),
-*CVE-2026-109618*, *CVE-2026-109619*, *Verify & Patch Test*, and
+**New — Beginner Friendly:** the **Solution → 📖 Walkthrough (Beginner)** tab in the app now renders the full `WALKTHROUGH.md` live in your browser with plain-English explanations, a glossary, a 12-step visual roadmap, copy buttons for every command, a progress tracker that saves in your browser, and a checklist for each task. It’s the same file as `WALKTHROUGH.md` but formatted so even first-time hackers can find **both CVEs (CVE-2026-109618 + CVE-2026-109619)** and solve the lab. Open it at `http://127.0.0.1:8080/?view=lab&tab=walkthrough` once the lab is running — or read `WALKTHROUGH.md` directly in the repo (see §0 “Beginner’s Guide” at the top for a plain-English intro).
+
+The **Solution** view in the app has six tabs: *Overview*, ***📖 Walkthrough (Beginner)*** — the full `WALKTHROUGH.md` rendered for beginners, *CVE-2026-109618*, *CVE-2026-109619*, *Verify & Patch Test*, and
 **Real-World Hunt — Tester Guide**. The last one is a ten-step, no-exploit field
 workflow for finding these CVEs on infrastructure you are authorized to test:
 ground truth → asset inventory → fingerprint → patch/backport status → attack
