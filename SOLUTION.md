@@ -1,17 +1,26 @@
 # Solution — PHP2Shell lab + real-world tester guide
 
 This repository has **two** "solutions": the in-app walkthrough and the field
-guide for finding the same CVEs on real infrastructure. Both are deliberately
-**no-exploit** — a version-and-configuration finding is enough to drive a patch,
-and these are memory-corruption bugs that can crash workers or leak other users'
-data if you "just try a PoC" on production.
+guide for finding the same CVEs on real infrastructure — plus a **lab-only
+impact chain** so the room ends at real access instead of at "possible".
+
+Nothing here is a weaponised exploit. The CVEs are memory-corruption bugs in the
+PHP engine with no public FPM exploit, so `php2shell-lab/lab-exploit.php`
+*simulates* the documented lifetime violation inside the disposable container
+(per-worker file instead of the worker heap, real bounded OOM bailout, same-worker
+reuse, command execution, flag). It refuses to run on a patched engine. On real
+infrastructure the deliverable is still the version-and-configuration finding:
+patching beats "just trying a PoC" on production, where a crash can leak other
+users' data.
 
 ## Where things live
 
 | What | Where |
 |---|---|
 | **Guided room / walkthrough** (tasks, answers, report) | [`WALKTHROUGH.md`](WALKTHROUGH.md) |
-| In-app **Solution** page (simple 7-step walkthrough) | `php2shell-lab/index.php` → sidebar *Solution* |
+| In-app **Solution** page (simple 16-step walkthrough, both chains + flags) | `php2shell-lab/index.php` → sidebar *Solution* |
+| **Impact chain runner** (lab only, ends in code execution + flag) | `php2shell-lab/lab-exploit.php` → <http://127.0.0.1/lab-exploit.php> |
+| One-command chain driver | `python3 cve-demonstrations/run_chain.py --chain both` |
 | Full standalone step-by-step guide | [`cve-demonstrations/REAL-WORLD-TESTER-GUIDE.md`](cve-demonstrations/REAL-WORLD-TESTER-GUIDE.md) |
 | Per-CVE evidence workbooks | [`CVE-2026-109618.md`](cve-demonstrations/CVE-2026-109618.md) · [`CVE-2026-109619.md`](cve-demonstrations/CVE-2026-109619.md) |
 | Investigation instructions + baseline collector | [`cve-demonstrations/README.md`](cve-demonstrations/README.md) · [`collect_runtime.py`](cve-demonstrations/collect_runtime.py) |
@@ -22,10 +31,24 @@ data if you "just try a PoC" on production.
 **Lab answer:** the two flaws are in the PHP engine, not in the dashboard app.
 The lab pins `php:8.4.26-fpm-alpine` (SAPI `fpm-fcgi`), one release before the
 fixes in **8.5.12 / 8.4.27 / 8.3.36 / 8.2.35**. You "solve" it by proving which
-engine build you hit, reproducing the specific defect on a diagnostic build with
-a vendor regression test, capturing the trace, and showing the trace disappears
-on a patched build with identical configuration. An OOM error, HTTP 500, crashed
-worker, or OOM-killed container is **not** a solution.
+engine build you hit, proving the preconditions, **completing both impact chains
+to their flags**, and showing the identical chains are refused on a patched build:
+
+| Chain | Steps | Flag |
+|---|---|---|
+| CVE-2026-109618 | `arm` → `oom` (same worker) → `fire` | `PHP2SHELL{109618-oom-bailout-reused-worker-memory}` |
+| CVE-2026-109619 | `producer` (same worker) → `fire` | `PHP2SHELL{109619-stale-worker-global-after-fatal}` |
+
+```bash
+docker run -d --name php2shell-vm --memory=256m --cpus=1 -p 127.0.0.1:80:80 php2shell-lab:8.4.26
+python3 cve-demonstrations/run_chain.py --chain both            # both flags
+python3 cve-demonstrations/run_chain.py --chain both --base http://127.0.0.1:8081   # refused: patched
+```
+
+An OOM error, HTTP 500, crashed worker, or OOM-killed container is **not** a
+solution by itself — Task 8 uses exactly that as a control. The chain is what
+turns the finding into demonstrated impact, and the report must label it as a
+lab simulation.
 
 **Real-world answer (the 10-step tester loop):**
 

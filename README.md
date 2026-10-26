@@ -11,7 +11,8 @@ Security-research workspace for the **PHP2Shell** vulnerabilities
   analytics dashboard as the app) for analysing and testing the flaws.
 * [`WALKTHROUGH.md`](./WALKTHROUGH.md) — **start here for hands-on practice**: a
   TryHackMe/Hack The Box-style guided room (setup → recon → fingerprint → patch
-  triage → attack requirements → evidence → report → retest) with 12 tasks,
+  triage → attack requirements → **both chains to code execution + flag** →
+  evidence → report → retest) with 12 tasks,
   expected output, hidden answers, a full answer key and a completion checklist.
 * [`SOLUTION.md`](./SOLUTION.md) — entry point: the lab answer plus the ten-step
   real-world tester loop, with links to every workbook.
@@ -19,8 +20,16 @@ Security-research workspace for the **PHP2Shell** vulnerabilities
   **both** CVEs: how each claim would be validated, what triggers/diagnostics
   count as evidence, a safe loopback baseline collector (`collect_runtime.py`),
   and the [real-world tester guide](./cve-demonstrations/REAL-WORLD-TESTER-GUIDE.md).
-* **Solution** page in the lab UI — a short, simple 7-step walkthrough with
-  copy buttons and checkboxes.
+* **Solution** page in the lab UI — a short, simple 16-step walkthrough with
+  copy buttons, checkboxes, and both attack chains ending in a flag.
+* [`php2shell-lab/lab-exploit.php`](./php2shell-lab/lab-exploit.php) — the
+  **lab-only impact chain runner**: drives each CVE from recon to a command
+  running as `www-data` plus a flag that only code execution can read. It is a
+  simulator of the documented impact (no public exploit exists), refuses to run
+  on a patched engine, and is disabled by removing
+  `/opt/php2shell/impact-sim.enabled`.
+* [`cve-demonstrations/run_chain.py`](./cve-demonstrations/run_chain.py) — one
+  command to run a chain end to end (`--chain both` prints both flags).
 
 See [`php2shell-lab/README.md`](./php2shell-lab/README.md) for the exact
 build/run/verify commands and [`cve-demonstrations/README.md`](./cve-demonstrations/README.md)
@@ -29,8 +38,9 @@ with [`REAL-WORLD-TESTER-GUIDE.md`](./cve-demonstrations/REAL-WORLD-TESTER-GUIDE
 it teaches how to find and qualify these CVEs on infrastructure you are
 authorized to test, without running exploit payloads against production.
 
-> ⚠️ The lab image ships a known-vulnerable PHP runtime. Run it isolated;
-> never expose it to networks you care about. As of 2026-10-25 the CVE identities,
+> ⚠️ The lab image ships a known-vulnerable PHP runtime **and** a lab-only impact
+> chain runner that can execute commands inside the container. Run it isolated on
+> loopback (port 80); never expose it to networks you care about. As of 2026-10-25 the CVE identities,
 > affected SAPIs and fixed versions (8.5.12 / 8.4.27 / 8.3.36 / 8.2.35) have been
 > checked against the PHP.net advisory, both php-src GHSAs, the CISA alert and
 > NCSC-NL's operational repo (see the tester guide). Still re-verify at the start

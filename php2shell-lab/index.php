@@ -1262,11 +1262,15 @@ $boot = [
       <!-- intro -->
       <div class="sol-card">
         <h2 class="sol-title">Solution: Walkthrough</h2>
-        <p class="sol-text">This lab runs an <strong>old version of PHP</strong> (the programming language this website is built with). PHP has two known bugs that let an attacker run commands on the server. Your only job is to answer one question:</p>
-        <p class="sol-text" style="font-size:16px;color:#0f172a;font-weight:600;margin-top:10px">Is this PHP version safe, or does it need an update?</p>
-        <p class="sol-text">You will <strong>not</strong> attack anything. Just check the version and the settings, then write down your answer.</p>
+        <p class="sol-text">This lab runs an <strong>old version of PHP</strong> (the programming language this website is built with). PHP has two known bugs that let an attacker run commands on the server. In this room you do two things for <em>each</em> bug:</p>
+        <ul class="sol-list">
+          <li><strong>Prove it is there</strong> — version, settings, evidence. That is the part a client pays for.</li>
+          <li><strong>Finish the chain</strong> — end at real access: a command runs on the server and you read its flag.</li>
+        </ul>
+        <p class="sol-text" style="font-size:16px;color:#0f172a;font-weight:600;margin-top:10px">Two bugs, two flags: <code>PHP2SHELL{…109618…}</code> and <code>PHP2SHELL{…109619…}</code></p>
+        <p class="sol-text">Everything here runs inside the throw-away lab container you start in step 2. The last step of each chain is a <strong>lab simulation</strong> of the bug's impact (the real bugs live deep inside PHP and have no public exploit). It proves you can drive the chain, not that a normal website is breakable.</p>
         <div class="sol-bar" aria-hidden="true"><div id="sol-bar-fill"></div></div>
-        <p class="sol-text" style="font-size:13px"><span id="sol-count">0</span> of 11 steps done <span style="opacity:.7">(saved in this browser)</span></p>
+        <p class="sol-text" style="font-size:13px"><span id="sol-count">0</span> of 16 steps done <span style="opacity:.7">(saved in this browser)</span></p>
       </div>
 
       <div class="sol-card sol-warn">
@@ -1274,22 +1278,25 @@ $boot = [
         <ul class="sol-list">
           <li>Use this only on your own computer. Never put this lab on the internet.</li>
           <li>Run the commands in a terminal, in the <code>cvephp</code> folder you downloaded.</li>
-          <li>An error message or a crash is <strong>not</strong> a win. You only need to find the version and the settings.</li>
+          <li>The chain steps really do run a command — inside the lab container only, as the web user <code>www-data</code>. That is the point of a lab.</li>
+          <li>Turn the chain runner off at any time: <code>docker exec php2shell-vm rm /opt/php2shell/impact-sim.enabled</code></li>
+          <li>An error message or a crash is <strong>not</strong> a win. The flag is the win.</li>
         </ul>
       </div>
 
       <!-- the two bugs in plain words -->
       <div class="sol-card">
         <p class="sol-h">The two bugs in plain words</p>
-        <p class="sol-text">Both bugs are inside PHP itself, not in the dashboard. Both are fixed in the same new versions.</p>
+        <p class="sol-text">Both bugs are inside PHP itself, not in the dashboard. Both are fixed in the same new versions, and both end in the same place: <strong>an attacker runs a command on your server</strong>.</p>
 
         <div style="margin-top:16px;border-top:1px solid #e2e8f0;padding-top:14px">
           <p class="sol-h">Bug 1: CVE-2026-109618 (memory bug)</p>
           <ul class="sol-list">
-            <li><strong>What it is:</strong> PHP runs out of memory while handling a request, and then reads memory that is no longer safe to use.</li>
-            <li><strong>Why it matters:</strong> an attacker could use this to take control of the server.</li>
+            <li><strong>What it is:</strong> PHP runs out of memory while handling a request, and then reuses memory that is no longer safe.</li>
+            <li><strong>Why it matters:</strong> the attacker's data survives the crash, so the next request can be made to run it.</li>
             <li><strong>Setting to look at:</strong> <code>memory_limit</code>. A small limit like 256M makes running out of memory easier.</li>
             <li><strong>Fixed in:</strong> PHP 8.4.27 (and 8.5.12, 8.3.36, 8.2.35).</li>
+            <li><strong>Final step:</strong> a second request on the <em>same worker</em> finds your data and runs your command → flag 1.</li>
           </ul>
         </div>
 
@@ -1297,13 +1304,19 @@ $boot = [
           <p class="sol-h">Bug 2: CVE-2026-109619 (leftover data bug)</p>
           <ul class="sol-list">
             <li><strong>What it is:</strong> PHP keeps a pointer to memory it has already freed. A later request on the same worker can then use that old pointer.</li>
-            <li><strong>Why it matters:</strong> the same attack risk as bug 1.</li>
+            <li><strong>Why it matters:</strong> the same attack risk as bug 1: run the attacker's code.</li>
             <li><strong>Setting to look at:</strong> <code>session.upload_progress.enabled</code>. When it is <code>On</code>, this bug's path is open.</li>
             <li><strong>Fixed in:</strong> the same versions as bug 1.</li>
+            <li><strong>Final step:</strong> request A leaves the pointer behind, request B on the same worker follows it and runs your command → flag 2.</li>
           </ul>
         </div>
 
         <p class="sol-text" style="margin-top:14px"><strong>Simple rule:</strong> if your PHP version is older than the fixed version, the server is at risk from both bugs until you update.</p>
+      </div>
+
+      <div class="sol-card">
+        <p class="sol-h">The chain runner (used in steps 7–12)</p>
+        <p class="sol-text">Every chain step talks to <a href="lab-exploit.php" target="_blank" rel="noopener" style="color:#4f46e5;font-weight:600">lab-exploit.php</a> — open it to see the whole chain, the current worker, and which flags have been captured. It exists only inside this lab container, refuses to run on a patched engine, and can be switched off with <code>rm /opt/php2shell/impact-sim.enabled</code>. It is a simulator of the documented impact, not a public exploit.</p>
       </div>
 
       <p class="sol-title" style="font-size:16px;margin:18px 4px 0">Part 1: Get the lab running</p>
@@ -1323,9 +1336,9 @@ $boot = [
         <div class="sol-step">
           <div class="sol-num">2</div>
           <div class="sol-body">
-            <p class="sol-h">Start the lab</p>
-            <p class="sol-text">In the <code>cvephp</code> folder, run these two lines. The first builds the lab, the second starts it.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker build -f php2shell-lab/Dockerfile --build-arg PHP_IMAGE=php:8.4.26-fpm-alpine -t php2shell-lab:8.4.26 php2shell-lab
-docker run -d --name php2shell-vm --memory=256m --cpus=1 -p 127.0.0.1:8080:80 php2shell-lab:8.4.26</div>            <div class="sol-expect">The second line prints a long code. That means the lab is running.</div>
+            <p class="sol-h">Start the lab on port 80</p>
+            <p class="sol-text">In the <code>cvephp</code> folder, run these two lines. The first builds the lab, the second starts it. The lab listens on <strong>port 80</strong>, so its address is <code>http://127.0.0.1</code>.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker build -f php2shell-lab/Dockerfile --build-arg PHP_IMAGE=php:8.4.26-fpm-alpine -t php2shell-lab:8.4.26 php2shell-lab
+docker run -d --name php2shell-vm --memory=256m --cpus=1 -p 127.0.0.1:80:80 php2shell-lab:8.4.26</div>            <div class="sol-expect">The second line prints a long code. That means the lab is running. Port 80 busy? Stop whatever uses it — the guide assumes port 80 everywhere.</div>
             <label class="sol-done"><input type="checkbox" data-step-check="2"> I did this step</label>
           </div>
         </div>
@@ -1336,7 +1349,7 @@ docker run -d --name php2shell-vm --memory=256m --cpus=1 -p 127.0.0.1:8080:80 ph
           <div class="sol-num">3</div>
           <div class="sol-body">
             <p class="sol-h">Check the lab answers</p>
-            <p class="sol-text">Ask the lab a simple question. Copy this line, or open the link in your browser:</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>curl -s "http://127.0.0.1:8080/index.php?api=ping"</div>            <div class="sol-expect">You should see <code>"status": "ok"</code>. If not, wait 10 seconds and try again.</div>
+            <p class="sol-text">Ask the lab a simple question. Copy this line, or open the link in your browser:</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>curl -s "http://127.0.0.1/index.php?api=ping"</div>            <div class="sol-expect">You should see <code>"status": "ok"</code>. If not, wait 10 seconds and try again. The dashboard itself is at <code>http://127.0.0.1/</code>.</div>
             <label class="sol-done"><input type="checkbox" data-step-check="3"> I did this step</label>
           </div>
         </div>
@@ -1349,7 +1362,7 @@ docker run -d --name php2shell-vm --memory=256m --cpus=1 -p 127.0.0.1:8080:80 ph
           <div class="sol-num">4</div>
           <div class="sol-body">
             <p class="sol-h">Read the PHP version</p>
-            <p class="sol-text">PHP is the programming language the website is built with. Both bugs live inside PHP, so the version matters most.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>curl -s "http://127.0.0.1:8080/index.php?api=ping"</div>            <div class="sol-expect">Look for <code>"php": "8.4.26"</code> and <code>"sapi": "fpm-fcgi"</code>. Write both down. <code>fpm-fcgi</code> means PHP is serving the website, which is the case the bugs care about.</div>
+            <p class="sol-text">PHP is the programming language the website is built with. Both bugs live inside PHP, so the version matters most.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>curl -s "http://127.0.0.1/index.php?api=ping"</div>            <div class="sol-expect">Look for <code>"php": "8.4.26"</code> and <code>"sapi": "fpm-fcgi"</code>. Write both down. <code>fpm-fcgi</code> means PHP is serving the website, which is the case the bugs care about.</div>
             <label class="sol-done"><input type="checkbox" data-step-check="4"> I did this step</label>
           </div>
         </div>
@@ -1360,33 +1373,33 @@ docker run -d --name php2shell-vm --memory=256m --cpus=1 -p 127.0.0.1:8080:80 ph
           <div class="sol-num">5</div>
           <div class="sol-body">
             <p class="sol-h">Check whether that version is fixed</p>
-            <p class="sol-text">Both bugs are fixed in these versions (or any newer one): <strong>8.4.27</strong>, 8.5.12, 8.3.36, 8.2.35.</p>            <p class="sol-text">Our lab runs <strong>8.4.26</strong>. That is lower than 8.4.27, so the lab is <strong>NOT patched</strong> for <strong>both</strong> bugs.</p>            <div class="sol-expect">Simple rule: lower number than the fixed one means not patched.</div>
+            <p class="sol-text">Both bugs are fixed in these versions (or any newer one): <strong>8.4.27</strong>, 8.5.12, 8.3.36, 8.2.35.</p>            <p class="sol-text">Our lab runs <strong>8.4.26</strong>. That is lower than 8.4.27, so the lab is <strong>NOT patched</strong> for <strong>both</strong> bugs.</p>
+            <div class="sol-expect">Simple rule: lower number than the fixed one means not patched.</div>
             <label class="sol-done"><input type="checkbox" data-step-check="5"> I did this step</label>
           </div>
         </div>
       </div>
 
-      <p class="sol-title" style="font-size:16px;margin:18px 4px 0">Part 3: Bug 1, CVE-2026-109618 (the memory bug)</p>
+      <p class="sol-title" style="font-size:16px;margin:18px 4px 0">Part 3: Bug 1, CVE-2026-109618 (the memory bug) — finish the chain</p>
 
       <div class="sol-card" data-step>
         <div class="sol-step">
           <div class="sol-num">6</div>
           <div class="sol-body">
             <p class="sol-h">Check the memory limit</p>
-            <p class="sol-text">Bug 1 happens when PHP runs out of memory. The memory limit is the cap on how much memory one page can use. A small cap makes running out easier, so we check it.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker exec php2shell-vm php -i | grep -E "^(memory_limit|post_max_size)"</div><ul class="sol-list"><li><code>memory_limit => 256M</code>: the cap is small, so bug 1 is possible.</li><li><code>post_max_size => 24M</code>: how big a form upload can be. Bigger uploads give more room to fill memory.</li></ul>            <p class="sol-text"><strong>Result for bug 1:</strong> the setting is present, and the version is not fixed. Bug 1 is <strong>possible</strong> here.</p>
+            <p class="sol-text">Bug 1 happens when PHP runs out of memory. The memory limit is the cap on how much memory one page can use. A small cap makes running out easier, so we check it.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker exec php2shell-vm php -i | grep -E "^(memory_limit|post_max_size)"</div><ul class="sol-list"><li><code>memory_limit => 256M</code>: the cap is small, so bug 1 is possible.</li><li><code>post_max_size => 24M</code>: how big a form upload can be. Bigger uploads give more room to fill memory.</li></ul>
+            <p class="sol-text"><strong>Result for bug 1:</strong> the setting is present, and the version is not fixed. Bug 1 is <strong>possible</strong> here.</p>
             <label class="sol-done"><input type="checkbox" data-step-check="6"> I did this step</label>
           </div>
         </div>
       </div>
 
-      <p class="sol-title" style="font-size:16px;margin:18px 4px 0">Part 4: Bug 2, CVE-2026-109619 (the leftover data bug)</p>
-
       <div class="sol-card" data-step>
         <div class="sol-step">
           <div class="sol-num">7</div>
           <div class="sol-body">
-            <p class="sol-h">Check the upload progress feature</p>
-            <p class="sol-text">Bug 2 needs a feature called upload progress. It is used to show how far a file upload has got. When it is on, the bug's path is open.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker exec php2shell-vm php -i | grep "^session.upload_progress.enabled"</div>            <div class="sol-expect">You should see <code>session.upload_progress.enabled => On</code>.</div>            <p class="sol-text"><strong>Result:</strong> the feature is on, so bug 2's path is open.</p>
+            <p class="sol-h">Run the whole chain to access (the easy way)</p>
+            <p class="sol-text">The lab ships a chain runner. It plants your data in one PHP worker, makes that same worker run out of memory, then sends a second request to the same worker — which finds your data and runs your command.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>python3 cve-demonstrations/run_chain.py --chain 109618</div>            <div class="sol-expect">The last lines should say <code>ACCESS CONFIRMED</code>, show <code>uid=82(www-data)</code> and print <code>PHP2SHELL{109618-oom-bailout-reused-worker-memory}</code>. That flag is <strong>flag 1</strong>. Wrong-worker messages along the way are normal — the script retries until it hits the right worker.</div>
             <label class="sol-done"><input type="checkbox" data-step-check="7"> I did this step</label>
           </div>
         </div>
@@ -1396,9 +1409,68 @@ docker run -d --name php2shell-vm --memory=256m --cpus=1 -p 127.0.0.1:8080:80 ph
         <div class="sol-step">
           <div class="sol-num">8</div>
           <div class="sol-body">
-            <p class="sol-h">Check how long PHP workers live</p>
-            <p class="sol-text">A worker is a helper process that handles visitors. Bug 2 needs a worker to keep old data around for the next request. If workers never restart, the old data stays. We check the restart setting:</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker exec php2shell-vm sh -c "grep -R pm.max_requests /usr/local/etc/php-fpm.d/"</div>            <div class="sol-expect">You should see <code>pm.max_requests = 0</code>. Zero means workers never restart, so the old data stays around.</div>            <p class="sol-text"><strong>Result for bug 2:</strong> the feature is on and workers never restart. Bug 2 is <strong>possible</strong> here.</p>
+            <p class="sol-h">See what the chain actually does (three requests)</p>
+            <p class="sol-text">Open the runner in a browser at <code>http://127.0.0.1/lab-exploit.php</code> to read the whole thing, or do the steps by hand. Note the <code>worker_pid</code> in the first answer — the next two requests must hit that same worker.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button># 1. plant your data in one worker (write down worker_pid)
+curl -s "http://127.0.0.1/lab-exploit.php?chain=109618&stage=arm&marker=mydata1234&cmd=id"
+
+# 2. make that same worker die out of memory (repeat until it hits it)
+curl -s "http://127.0.0.1/lab-exploit.php?chain=109618&stage=oom&expected_pid=<worker_pid>"
+
+# 3. second request on the same worker → the command runs, the flag appears
+curl -s "http://127.0.0.1/lab-exploit.php?chain=109618&stage=fire&marker=mydata1234"</div>            <div class="sol-expect">Step 3 answers <code>{"access": true, "flag": "PHP2SHELL{...}"}</code>. If you get <code>wrong_worker</code>, just send it again — that is the "same worker" rule, not an error in your testing.</div>
             <label class="sol-done"><input type="checkbox" data-step-check="8"> I did this step</label>
+          </div>
+        </div>
+      </div>
+
+      <p class="sol-title" style="font-size:16px;margin:18px 4px 0">Part 4: Bug 2, CVE-2026-109619 (the leftover data bug) — finish the chain</p>
+
+      <div class="sol-card" data-step>
+        <div class="sol-step">
+          <div class="sol-num">9</div>
+          <div class="sol-body">
+            <p class="sol-h">Check the upload progress feature</p>
+            <p class="sol-text">Bug 2 needs a feature called upload progress. It is used to show how far a file upload has got. When it is on, the bug's path is open.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker exec php2shell-vm php -i | grep "^session.upload_progress.enabled"</div>            <div class="sol-expect">You should see <code>session.upload_progress.enabled => On</code>.</div>
+            <p class="sol-text"><strong>Result:</strong> the feature is on, so bug 2's path is open.</p>
+            <label class="sol-done"><input type="checkbox" data-step-check="9"> I did this step</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="sol-card" data-step>
+        <div class="sol-step">
+          <div class="sol-num">10</div>
+          <div class="sol-body">
+            <p class="sol-h">Check how long PHP workers live</p>
+            <p class="sol-text">A worker is a helper process that handles visitors. Bug 2 needs a worker to keep old data around for the next request. If workers never restart, the old data stays. We check the restart setting:</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker exec php2shell-vm sh -c "grep -R pm.max_requests /usr/local/etc/php-fpm.d/"</div>            <div class="sol-expect">You should see <code>pm.max_requests = 0</code>. Zero means workers never restart, so the old data stays around.</div>
+            <p class="sol-text"><strong>Result for bug 2:</strong> the feature is on and workers never restart. Bug 2 is <strong>possible</strong> here.</p>
+            <label class="sol-done"><input type="checkbox" data-step-check="10"> I did this step</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="sol-card" data-step>
+        <div class="sol-step">
+          <div class="sol-num">11</div>
+          <div class="sol-body">
+            <p class="sol-h">Run the whole chain to access (the easy way)</p>
+            <p class="sol-text">Same idea, one request fewer: request A leaves a pointer behind and dies, request B on the same worker follows it.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>python3 cve-demonstrations/run_chain.py --chain 109619</div>            <div class="sol-expect">Look for <code>ACCESS CONFIRMED</code> and <code>PHP2SHELL{109619-stale-worker-global-after-fatal}</code>. That is <strong>flag 2</strong>. When you have both flags, both bugs are complete — not just "possible".</div>
+            <label class="sol-done"><input type="checkbox" data-step-check="11"> I did this step</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="sol-card" data-step>
+        <div class="sol-step">
+          <div class="sol-num">12</div>
+          <div class="sol-body">
+            <p class="sol-h">See what the chain actually does (two requests)</p>
+            <p class="sol-text">By hand: request A publishes the data and then dies with a fatal error (the reply shows the JSON and the fatal, that is expected). Request B must reach the same worker.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button># request A — publishes state, then dies (write down worker_pid)
+curl -s "http://127.0.0.1/lab-exploit.php?chain=109619&stage=producer&marker=mydata1234&cmd=id"
+
+# request B — same worker, stale pointer, command runs (repeat until it hits it)
+curl -s "http://127.0.0.1/lab-exploit.php?chain=109619&stage=fire&marker=mydata1234"</div>            <div class="sol-expect">Request B answers <code>"access": true</code> with the flag. If it says <code>wrong_worker</code>, send it again until it reaches the worker that published the data.</div>
+            <label class="sol-done"><input type="checkbox" data-step-check="12"> I did this step</label>
           </div>
         </div>
       </div>
@@ -1407,13 +1479,24 @@ docker run -d --name php2shell-vm --memory=256m --cpus=1 -p 127.0.0.1:8080:80 ph
 
       <div class="sol-card" data-step>
         <div class="sol-step">
-          <div class="sol-num">9</div>
+          <div class="sol-num">13</div>
           <div class="sol-body">
             <p class="sol-h">Build a fixed copy to compare (recommended)</p>
-            <p class="sol-text">This builds the same lab, but with the fixed PHP version. Only the version changes, so you can see the difference.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker build -f php2shell-lab/Dockerfile --build-arg PHP_IMAGE=php:8.4.27-fpm-alpine -t php2shell-lab:8.4.27 php2shell-lab
+            <p class="sol-text">This builds the same lab, but with the fixed PHP version. Only the version changes, so you can see the difference. It runs on host port 8081 so it does not clash with the port 80 target.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker build -f php2shell-lab/Dockerfile --build-arg PHP_IMAGE=php:8.4.27-fpm-alpine -t php2shell-lab:8.4.27 php2shell-lab
 docker run -d --name php2shell-patched --memory=256m --cpus=1 -p 127.0.0.1:8081:80 php2shell-lab:8.4.27
 curl -s "http://127.0.0.1:8081/index.php?api=ping"</div>            <div class="sol-expect">The last line should show <code>"php": "8.4.27"</code>. That version is fixed for both bugs.</div>
-            <label class="sol-done"><input type="checkbox" data-step-check="9"> I did this step</label>
+            <label class="sol-done"><input type="checkbox" data-step-check="13"> I did this step</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="sol-card" data-step>
+        <div class="sol-step">
+          <div class="sol-num">14</div>
+          <div class="sol-body">
+            <p class="sol-h">Run the same chains against the fixed copy</p>
+            <p class="sol-text">Run exactly the same commands, but pointed at the fixed copy. The bug is gone, so the chain cannot start.</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>python3 cve-demonstrations/run_chain.py --chain both --base http://127.0.0.1:8081</div>            <div class="sol-expect">It should stop with <code>engine is patched — the lab correctly refuses to run the chain</code> (or HTTP 403 <code>patched_engine</code> if you use curl). Same requests, no access. That is your before/after proof.</div>
+            <label class="sol-done"><input type="checkbox" data-step-check="14"> I did this step</label>
           </div>
         </div>
       </div>
@@ -1422,11 +1505,11 @@ curl -s "http://127.0.0.1:8081/index.php?api=ping"</div>            <div class="
 
       <div class="sol-card" data-step>
         <div class="sol-step">
-          <div class="sol-num">10</div>
+          <div class="sol-num">15</div>
           <div class="sol-body">
             <p class="sol-h">Write the report (copy and fill in)</p>
-            <p class="sol-text">Use this sentence and put in your own numbers:</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>Our lab runs PHP 8.4.26 (fpm-fcgi). The fixed version is 8.4.27, so it is NOT patched for CVE-2026-109618 (memory bug) or CVE-2026-109619 (leftover data bug). Found: memory_limit 256M, post_max_size 24M, session.upload_progress On, pm.max_requests 0. Recommendation: update PHP to 8.4.27 or newer and restart the workers. We did not attack the system.</div>
-            <label class="sol-done"><input type="checkbox" data-step-check="10"> I did this step</label>
+            <p class="sol-text">Use this sentence and put in your own numbers and flags:</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>Our lab runs PHP 8.4.26 (fpm-fcgi). The fixed version is 8.4.27, so it is NOT patched for CVE-2026-109618 (memory bug) or CVE-2026-109619 (leftover data bug). Found: memory_limit 256M, post_max_size 24M, session.upload_progress On, pm.max_requests 0. Both chains were completed in the isolated lab only: commands ran as www-data and read flags PHP2SHELL{109618-oom-bailout-reused-worker-memory} and PHP2SHELL{109619-stale-worker-global-after-fatal}. The affect is a lab simulation of the documented impact (no public exploit exists); nothing outside the lab was touched. Recommendation: update PHP to 8.4.27 or newer and restart the workers.</div>
+            <label class="sol-done"><input type="checkbox" data-step-check="15"> I did this step</label>
           </div>
         </div>
       </div>
@@ -1435,16 +1518,17 @@ curl -s "http://127.0.0.1:8081/index.php?api=ping"</div>            <div class="
 
       <div class="sol-card" data-step>
         <div class="sol-step">
-          <div class="sol-num">11</div>
+          <div class="sol-num">16</div>
           <div class="sol-body">
             <p class="sol-h">Stop and remove the lab</p>
-            <p class="sol-text">Stop and remove both boxes when you are finished:</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker rm -f php2shell-vm php2shell-patched</div>
-            <label class="sol-done"><input type="checkbox" data-step-check="11"> I did this step</label>
+            <p class="sol-text">Stop and remove both boxes when you are finished (the images hold a vulnerable PHP build):</p><div class="sol-code"><button type="button" class="sol-copy">Copy</button>docker rm -f php2shell-vm php2shell-patched</div>
+            <label class="sol-done"><input type="checkbox" data-step-check="16"> I did this step</label>
           </div>
         </div>
       </div>
 
-      <p class="sol-text" style="text-align:center">Want every detail? The full guide is <code>WALKTHROUGH.md</code> in the repository.</p>
+      <p class="sol-text" style="text-align:center">Two flags = both chains complete. Want every detail, including the patch triage, evidence ladder, detection hunt and retest? Read <code>WALKTHROUGH.md</code> in the repository.</p>
+
     </section>
   </main>
 

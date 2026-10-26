@@ -8,12 +8,12 @@
 | | |
 |---|---|
 | **Room** | PHP2Shell |
-| **Target** | `http://127.0.0.1:8080` (loopback only) |
+| **Target** | `http://127.0.0.1` — **port 80** (loopback only) |
 | **Difficulty** | Medium — Linux, Docker, PHP internals, vulnerability management |
-| **Estimated time** | 90–120 minutes (tasks 1–10); 3–4 h with the capstone |
+| **Estimated time** | 2–3 h for tasks 1–10 incl. both chains; 3–4 h with the report capstone |
 | **Prerequisites** | Docker, `curl`, `jq` (optional but recommended), `python3`, basic HTTP knowledge |
 | **CVEs** | CVE-2026-109618 (OOM corruption), CVE-2026-109619 (stale global state) |
-| **Win condition** | A defensible, evidence-backed patch finding — **not** a root shell |
+| **Win condition** | Two lab flags — one per CVE, from a completed attack chain — **and** a defensible, evidence-backed patch finding |
 
 > **Spoiler warning.** This is the solution guide. Every task has a hidden
 > answer in a collapsible block, and the full answer key is at the end. If you
@@ -108,12 +108,15 @@ Your browser
 6. You saved a clean baseline (evidence folder).
 7. You understand worker reuse (same PID trick for CVE-2026-109619).
 8. You know what is *not* evidence (a crash ≠ RCE).
-9. You wrote a professional report at L2.
-10. You know how to hunt for past attacks.
-11. You patched and proved the fix.
-12. You cleaned up.
+9. **You finished the CVE-2026-109619 chain**: leftover state → a command ran → **flag 2**.
+10. **You finished the CVE-2026-109618 chain**: OOM bailout → reused memory → a command ran → **flag 1**.
+11. You wrote a professional L2 report that records the lab chains honestly.
+12. You know how to hunt for past attacks.
+13. You patched and proved the fix — the patched build refuses the same chains.
+14. You cleaned up.
 
-**Win condition:** A one-page report at L2 that another tester could reproduce from your evidence alone. No shell needed!
+**Win condition:** both flags **and** the one-page L2 report. The flags prove you
+can drive the attack; the report is what a client would actually pay for.
 
 ### How to use this guide as a beginner
 
@@ -150,10 +153,12 @@ If those work, you’re ready. If `docker` is missing, install [Docker Desktop](
 | **Needs** | Finite `memory_limit` + controllable OOM (e.g., big multipart) | `session.upload_progress.enabled=On` (default) + **same worker** twice + fatal error |
 | **Demonstrated on** | `mod_php` (complete RCE). FPM: “susceptible by code review, no complete FPM exploit demonstrated” | `mod_php` **and** `FPM` (validated) |
 | **Fixed in** | 8.4.27 / 8.5.12 / 8.3.36 / 8.2.35 | Same |
-| **Your evidence in this lab** | Version + SAPI + `memory_limit=256M` + advisory says susceptible. You will see a normal OOM error on BOTH vulnerable and patched — that proves error ≠ exploit. | Version + SAPI + `upload_progress=On` + `pm.max_requests=0` (workers live forever). You will pin one worker and show same-PID vs recycled-PID. |
+| **Your evidence in this lab** | Version + SAPI + `memory_limit=256M` + advisory says susceptible. You will see a normal OOM error on BOTH vulnerable and patched — that proves error ≠ exploit. Then you complete the lab chain (Task 8.5) and take **flag 1**. | Version + SAPI + `upload_progress=On` + `pm.max_requests=0` (workers live forever). You pin one worker, compare same-PID vs recycled-PID, then complete the chain (Task 7.5) and take **flag 2**. |
 | **Honest claim (L2)** | “Potentially affected — version match + preconditions present. No complete FPM exploit demonstrated, but patch urgently.” | “Likely exposed — unpatched + FPM-validated path + preconditions present. No exploit attempted.” |
 
-**You solve BOTH by:** proving the engine is 8.4.26 fpm-fcgi (pre-fix), proving preconditions, saving baseline, and showing patched control (8.4.27) behaves differently at the evidence level (or at least documenting the L2 gap honestly). No exploit needed — that’s the professional way!
+**You solve BOTH by:** proving the engine is 8.4.26 fpm-fcgi (pre-fix), proving the preconditions, saving a baseline, **completing the lab chain to the flag**, and showing the patched control (8.4.27) refuses the same chain. The chain runs through the lab's own impact simulator — the professional part is labelling it as such.
+
+> **Fastest complete path:** `python3 cve-demonstrations/run_chain.py --chain both` runs both chains end to end and prints both flags. Do the tasks anyway: the flags are the win, but the report is the skill.
 
 ---
 
@@ -166,16 +171,16 @@ Task 3  👁️  Which PHP exactly? ──► 8.4.26 + fpm-fcgi (not cli!)
 Task 4  🩹  Is it patched? ──► No, 8.4.27 is the fix
 Task 5  ⚙️  Can attacker reach bug? ──► memory/upload/session/workers
 Task 6  📦  Save evidence ──► baseline.json + hashes
-Task 7  🔄  Worker trick ──► same PID matters for 109619
-Task 8  💥  Crash ≠ hack ──► OOM on BOTH builds = not proof
-Task 9  📝  Write report ──► L2 finding, honest and reproducible
+Task 7  🔄  Worker trick ──► same PID, then chain 2 → flag 2
+Task 8  💥  Crash ≠ hack ──► OOM control, then chain 1 → flag 1
+Task 9  📝  Write report ──► L2 finding + lab chains, honest and reproducible
 Task 10 🔎  Hunt logs ──► did someone already exploit?
 Task 11 ✅  Patch & retest ──► 8.4.27 + new workers + same checks
 Task 12 🧹  Clean up ──► remove vulnerable image
          └─► You win! You can now do this on real infrastructure (with permission).
 ```
 
-> **Tip for beginners:** The website’s **Solution** page has a short version of this room with copy buttons and “I did this” checkboxes. Open it at `http://127.0.0.1:8080/?view=lab` once the lab is running.
+> **Tip for beginners:** The website’s **Solution** page has a short version of this room with copy buttons and “I did this” checkboxes. Open it at `http://127.0.0.1/?view=lab` once the lab is running.
 
 ---
 
@@ -196,13 +201,20 @@ actually pays for:
 That means proving four things: **asset → patch status → reachability → evidence
 tier**. Everything in this room builds toward the report in Task 9.
 
-### Why this room has no "root.txt"
+### Why this room ends with flags *and* a report
 
 These are memory-corruption bugs in the PHP engine. Running random
 memory-exhaustion payloads against a worker can crash it, leak another user's
-request memory, or take the service down — and this repository deliberately
-ships **no exploit**. A crash, an HTTP 500, an OOM error, or an OOM-killed
-container is **not** proof of either CVE. This room therefore scores you on
+request memory, or take the service down, so the lab ships **no weaponised
+exploit**. A crash, an HTTP 500, an OOM error, or an OOM-killed container is
+**not** proof of either CVE.
+
+What the lab *does* ship is `php2shell-lab/lab-exploit.php`: a clearly-labelled
+**impact simulator** that models the lifetime violation each advisory describes
+(a per-worker file stands in for the worker heap; the OOM bailout itself is a real
+bounded `memory_limit` fatal). It lets you drive the attack to its final step —
+a command running as `www-data` and a flag that only code execution can read —
+without pretending a public exploit exists. This room therefore scores you on
 evidence discipline, which is the actual senior-skill being tested:
 
 | Tier | What you have | Honest claim |
@@ -214,8 +226,23 @@ evidence discipline, which is the actual senior-skill being tested:
 | L4 | L3 + a full demonstrated code-execution chain | "Confirmed RCE — isolated lab only" |
 
 Most real engagements stop at **L2**, and L2 is enough to drive an emergency
-patch. This room's normal completion is a clean **L2** finding. Task 9 and the
-extra credit explain exactly what L3/L4 would additionally require.
+patch. This room has **two finishes**:
+
+1. **The lab chains (L4-shaped, honestly labelled).** Tasks 7 and 8 drive each CVE
+   from recon to code execution in the disposable container, ending with flags
+   that only code execution can read:
+
+   | CVE | Chain | Flag |
+   |---|---|---|
+   | CVE-2026-109618 | OOM bailout → reused request memory → command | `PHP2SHELL{109618-oom-bailout-reused-worker-memory}` |
+   | CVE-2026-109619 | producer fatal → stale worker global → command | `PHP2SHELL{109619-stale-worker-global-after-fatal}` |
+
+2. **The real-world deliverable.** Task 9's report at **L2**: asset, patch
+   status, reachability, evidence, fix — with the lab chains recorded as *lab
+   simulation*, never as a production exploit.
+
+Task 9 and the extra credit explain exactly what L3/L4 would additionally require
+on a real engine build.
 
 ### Rules of engagement
 
@@ -256,22 +283,24 @@ and pass it through `--build-arg`; record the substitution in your notes. Do
 ```bash
 docker run -d --name php2shell-vm \
   --memory=256m --cpus=1 \
-  -p 127.0.0.1:8080:80 \
+  -p 127.0.0.1:80:80 \
   php2shell-lab:8.4.26
 ```
 
 - `--memory=256m` matches the container to PHP's `memory_limit=256M`, so a
   runaway worker cannot eat your host. It also teaches the "container limit is
   not a security boundary" caveat from the advisory.
-- `-p 127.0.0.1:8080:80` binds loopback only. If you write `-p 8080:80` Docker
+- `-p 127.0.0.1:80:80` publishes **port 80** on loopback only — the room's
+  canonical target is `http://127.0.0.1`. If you write `-p 80:80` Docker
   publishes on all interfaces — don't.
-- Port busy? Change the host side (`-p 127.0.0.1:8081:80`) and set
-  `BASE=http://127.0.0.1:8081` for the rest of the room.
+- Port 80 already in use? Stop whatever owns it; only if you truly cannot,
+  map the host side to another port (`-p 127.0.0.1:8080:80`) and set
+  `BASE=http://127.0.0.1:8080`. Every command in this guide assumes port 80.
 
 ### 2.3 Smoke test
 
 ```bash
-BASE=http://127.0.0.1:8080
+BASE=http://127.0.0.1          # port 80
 
 curl -s "$BASE/healthz"                                  # ok
 curl -s "$BASE/index.php?api=ping" | jq .                # fingerprint
@@ -295,10 +324,26 @@ Expected ping (the `time` value changes):
 
 The dashboard has a **Solution** page with a simple step-by-step walkthrough. Open it at:
 
-- <http://127.0.0.1:8080/?view=lab>
-- <http://127.0.0.1:8080/?view=runtime> — live `ini_get()` posture
+- <http://127.0.0.1/?view=lab>
+- <http://127.0.0.1/?view=runtime> — live `ini_get()` posture
+- <http://127.0.0.1/lab-exploit.php> — the impact chain runner (Tasks 7 and 8)
 
-### 2.5 Create an evidence directory
+### 2.5 Confirm the chain runner is enabled
+
+The lab's impact chain runner is served from the same vhost, on the same port:
+
+```bash
+curl -s "http://127.0.0.1/lab-exploit.php?chain=109618&stage=recon" | jq '{worker_pid, php: .engine.php, sapi: .engine.sapi, verdict}'
+# => { "worker_pid": 24, "php": "8.4.26", "sapi": "fpm-fcgi",
+#      "verdict": "unpatched engine on a web SAPI with a finite memory limit — the chain can run" }
+```
+
+The runner is gated by `/opt/php2shell/impact-sim.enabled` inside the container
+(disable it with `docker exec php2shell-vm rm /opt/php2shell/impact-sim.enabled`)
+and by the engine version — on the patched build it refuses with HTTP 403
+`patched_engine`, which is how Task 11 proves the fix.
+
+### 2.6 Create an evidence directory
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"   # repo root
@@ -334,7 +379,7 @@ contain hostnames, paths, and configuration.
 > **Shell note.** Unless a block says otherwise, run commands from the repository
 > root. `BASE` is exported in Task 1; re-export it (and `BASE2` in Task 11) if
 > you open a new terminal. Blocks assume the container names `php2shell-vm`
-> (`:8080`) and `php2shell-patched` (`:8081`).
+> (`:80`) and `php2shell-patched` (`:8081`).
 
 ---
 
@@ -343,7 +388,7 @@ contain hostnames, paths, and configuration.
 **Goal:** prove the stack is healthy and learn the shape of the deployment.
 
 ```bash
-BASE=http://127.0.0.1:8080
+BASE=http://127.0.0.1          # port 80
 
 curl -s -o /dev/null -w 'healthz: %{http_code}\n' "$BASE/healthz"
 curl -s -o /dev/null -w 'dashboard: %{http_code}\n' "$BASE/"
@@ -395,7 +440,7 @@ engagement, and notice what the deployment leaks.
 ### 2.1 Ports
 
 ```bash
-nmap -sV -p 8080 127.0.0.1
+nmap -sV -p 80 127.0.0.1
 ```
 
 Expected: one open port, `http`, `nginx`. There is nothing else to find — this
@@ -469,6 +514,14 @@ Expected (wording depends on the PHP build):
 ```text
 [NOTICE] [pool www] child 24 said into stderr: "..." 
 ERROR: Unable to open primary script: /var/www/html/missing.php (No such file or directory)
+```
+
+One surface is deliberately **not** production-realistic: `/lab-exploit.php`
+(the impact chain runner used in Tasks 7 and 8). A real target will not have it.
+Discover it, note it as lab scaffolding, and never count it as a finding.
+
+```bash
+curl -s -o /dev/null -w 'chain runner: %{http_code}\n' "$BASE/lab-exploit.php"
 ```
 
 **Questions**
@@ -854,7 +907,7 @@ second tester can reproduce.
 ```bash
 cd "$(git rev-parse --show-toplevel)"   # repo root
 
-python3 cve-demonstrations/collect_runtime.py --port 8080 --json-pretty \
+python3 cve-demonstrations/collect_runtime.py --port 80 --json-pretty \
   > evidence/baseline-vuln.json
 
 docker inspect php2shell-vm > evidence/inspect-vuln.json
@@ -1040,8 +1093,90 @@ control, not a trigger.
 
 </details>
 
-✅ **Checkpoint 7:** you have demonstrated same-PID and recycled-PID cases
-without sending a single malicious request.
+### 7.5 Finish CVE-2026-109619: stale state → code execution → flag
+
+Everything so far was observation. Now finish the chain.
+
+The lab ships `lab-exploit.php` (open <http://127.0.0.1/lab-exploit.php>), a
+**lab-only impact simulator** that models the advisory's producer/consumer
+lifetime violation so you can see the end of the attack instead of stopping at
+"possible":
+
+- **producer** — request A publishes attacker data to a worker global, then dies
+  with a fatal error before clearing it;
+- **consumer** — request B on the same worker follows the stale pointer and runs
+  the command that was planted;
+- the target's **flag file** is only readable by code execution, so seeing it
+  proves the chain reached the host.
+
+Easy way (the script retries until it lands on the right worker):
+
+```bash
+python3 cve-demonstrations/run_chain.py --chain 109619
+```
+
+Expected tail:
+
+```text
+[2/3] producer request (attempt 1)
+    worker 24 published state and died with a fatal (HTTP 200)
+[3/3] next request on the same worker
+    landed on worker 24 after 4 request(s)
+    ACCESS CONFIRMED
+      uid      uid=82(www-data) gid=82(www-data)
+      whoami   www-data
+      flag     PHP2SHELL{109619-stale-worker-global-after-fatal}
+```
+
+By hand — note the `worker_pid` from request A, and expect `wrong_worker` replies
+while you wait for that worker to serve request B:
+
+```bash
+M=lab$(date +%s)
+
+# request A: publishes state, prints its worker_pid, then dies (JSON + fatal tail)
+curl -s "http://127.0.0.1/lab-exploit.php?chain=109619&stage=producer&marker=$M&cmd=id" | head -n 14
+
+# request B: same worker, stale pointer, command runs (repeat until it matches)
+for i in $(seq 1 40); do
+  R=$(curl -s "http://127.0.0.1/lab-exploit.php?chain=109619&stage=fire&marker=$M")
+  echo "$R" | grep -q '"access": true' && { echo "$R"; break; }
+done
+```
+
+Clean up that worker's slot:
+
+```bash
+curl -s "http://127.0.0.1/lab-exploit.php?chain=109619&stage=reset" | jq .
+```
+
+**Q29.** What exactly does the chain prove, and what does it *not* prove?
+**Q30.** Why must the consumer request reach the same worker, and what does the
+runner do about it?
+**Q31.** Where does the flag live, and why can you not simply fetch it with
+`curl http://127.0.0.1/.lab-flag-109619`?
+
+<details>
+<summary>Answers</summary>
+
+**A29.** It proves you can drive the documented producer/consumer lifetime
+violation end to end on this lab build and that a command runs as the PHP worker
+user. It does **not** prove the vendor engine is exploitable by a third party:
+the chain runs through the lab's simulator and no public FPM exploit exists, so
+the production finding stays at L2.
+**A30.** The dangling global and the request memory it points at belong to one FPM
+child; another child never saw request A. The runner repeats the consumer request
+until it lands on the publishing worker, and re-runs the producer if the pool
+recycled it.
+**A31.** It is `/var/www/html/.lab-flag-109619` inside the container, readable by
+`www-data`. nginx's dotfile rule (`location ~ /\. { deny all; }`) answers a direct
+request with 403, so only code execution (or `docker exec`) can read it.
+
+</details>
+
+✅ **Checkpoint 7:** same-PID and recycled-PID behaviour demonstrated, **and** the
+109619 chain completed to a command running as `www-data` with
+`PHP2SHELL{109619-…}` captured.
 
 ---
 
@@ -1124,26 +1259,26 @@ docker exec php2shell-patched rm -f /var/www/html/oom-probe.php
 rm -f /tmp/oom-probe.php
 ```
 
-**Q29.** What HTTP status and log message does the probe produce?
-**Q30.** Does 8.4.27 behave differently for this probe? What does that prove?
-**Q31.** What would you need in order to claim CVE-2026-109618 is confirmed in
+**Q32.** What HTTP status and log message does the probe produce?
+**Q33.** Does 8.4.27 behave differently for this probe? What does that prove?
+**Q34.** What would you need in order to claim CVE-2026-109618 is confirmed in
 this build?
-**Q32.** Distinguish a PHP `memory_limit` fatal from a container OOM kill.
+**Q35.** Distinguish a PHP `memory_limit` fatal from a container OOM kill.
 
 <details>
 <summary>Answers</summary>
 
-**A29.** HTTP 500 and
+**A32.** HTTP 500 and
 `Fatal error: Allowed memory size of 16777216 bytes exhausted ...`.
-**A30.** No — the patched build fails identically. It proves the fatal error is
+**A33.** No — the patched build fails identically. It proves the fatal error is
 ordinary engine behaviour and **not** a vulnerability signature, so it cannot
 distinguish vulnerable from patched.
-**A31.** A diagnostic build (symbols + ASAN or equivalent), the vendor
+**A34.** A diagnostic build (symbols + ASAN or equivalent), the vendor
 regression test or a trigger derived from the exact fixing commit, a
 sanitizer/debugger trace tied to that source revision, and the same sequence on a
 patched build with identical config showing the trace disappear. That is L3; a
 full code-execution chain would be L4.
-**A32.** A PHP `memory_limit` fatal is raised *inside* the PHP engine and is
+**A35.** A PHP `memory_limit` fatal is raised *inside* the PHP engine and is
 handled per request; the worker normally continues or is replaced. A container
 OOM kill is the kernel/cgroup killing a process for exceeding `memory.max`; it
 shows up in `docker inspect` as `OOMKilled=true` and can kill the master plus all
@@ -1151,8 +1286,87 @@ workers. Neither proves the CVE.
 
 </details>
 
-✅ **Checkpoint 8:** you produced a 500 on both builds and can explain why that
-is a control, not a finding.
+### 8.5 Finish CVE-2026-109618: OOM bailout → reused memory → flag
+
+You just proved the OOM fatal is *not* evidence. That does not end the CVE — it
+tells you which observation is worthless. Now complete the chain the other way:
+plant attacker-controlled data, take the vulnerable bailout, then let the next
+request on the same worker reuse the memory.
+
+```bash
+python3 cve-demonstrations/run_chain.py --chain 109618
+```
+
+Expected tail:
+
+```text
+[3/4] trigger the OOM bailout on that same worker
+    worker 24 died on attempt 3: Fatal error: Allowed memory size of 16777216 bytes exhausted ...
+[4/4] second request on the same worker
+    landed on worker 24 after 2 request(s)
+    ACCESS CONFIRMED
+      uid      uid=82(www-data) gid=82(www-data)
+      flag     PHP2SHELL{109618-oom-bailout-reused-worker-memory}
+```
+
+By hand:
+
+```bash
+M=lab$(date +%s)
+
+# 1. plant your data in one worker; note worker_pid
+curl -s "http://127.0.0.1/lab-exploit.php?chain=109618&stage=arm&marker=$M&cmd=id" | head -n 20
+P=<worker_pid from step 1>
+
+# 2. same worker: take the OOM bailout (HTTP 500 means it landed)
+for i in $(seq 1 40); do
+  C=$(curl -s -o /tmp/oom.out -w '%{http_code}' \
+        "http://127.0.0.1/lab-exploit.php?chain=109618&stage=oom&expected_pid=$P")
+  [ "$C" = "500" ] && { echo "bailout on worker $P"; break; }
+done
+grep -o 'Allowed memory size[^<]*' /tmp/oom.out | head -n 1
+
+# 3. next request on that worker: your data is still there → command runs
+for i in $(seq 1 40); do
+  R=$(curl -s "http://127.0.0.1/lab-exploit.php?chain=109618&stage=fire&marker=$M")
+  echo "$R" | grep -q '"access": true' && { echo "$R"; break; }
+done
+```
+
+The difference between 8.2 and 8.5 is the whole point of the room:
+
+| Observation | What it proves |
+|---|---|
+| `Allowed memory size exhausted` (8.2) | Only that PHP enforces `memory_limit` — identical on the patched build |
+| Chain 1 completes with the flag (8.5) | The bailout path left attacker data usable by a later request on the same worker — the documented defect, demonstrated |
+
+Both facts belong in the report, in that order.
+
+**Q36.** Why must the marker match on the second request?
+**Q37.** What did you have to do about the `pm = dynamic` pool, and why?
+**Q38.** The patched container answers this chain with HTTP 403
+`patched_engine`. Is that "the fix working", or just a lab guard?
+
+<details>
+<summary>Answers</summary>
+
+**A36.** The marker *is* the attacker-controlled data. If the next request does not
+inherit it, the memory was not reused and there is nothing to hijack — a mismatch
+is a failed chain, not a win.
+**A37.** Nothing permanent: the worker that receives the data must also take the
+OOM and the follow-up request, so you repeat requests (or let `run_chain.py` do
+it). Pinning the pool to one child (`pm = static`, `pm.max_children = 1`, §7.3)
+makes it deterministic at the cost of realism.
+**A38.** A lab guard *implemented from* the fix: above the fixed release the
+vulnerable path is absent, so the harness refuses to continue. The real retest is
+the same idea — identical requests, no vulnerable path left, new image digest,
+restarted workers (Task 11).
+
+</details>
+
+✅ **Checkpoint 8:** you produced a 500 on **both** builds (control), explained why
+that is not a finding, and then completed the 109618 chain to
+`PHP2SHELL{109618-…}`. Two flags = both CVEs driven to their final step.
 
 ---
 
@@ -1185,7 +1399,9 @@ Asset:    php2shell-vm / php:8.4.26-fpm-alpine
           base digest sha256:...
           local image ID sha256:...
           exposure: loopback lab only (simulated internet-facing)
-Evidence tier: L2 — version + SAPI + patch status + attack requirements; no exploit attempted
+Evidence tier: L2 finding — version + SAPI + patch status + attack requirements
+               + L4-shaped lab chain (SIMULATION in a disposable container;
+                 not a vendor exploit, no third-party exploit exists)
 
 Evidence:
   - Web SAPI: fpm-fcgi, PHP 8.4.26 via GET /index.php?api=ping (timestamp, baseline hash)
@@ -1201,6 +1417,12 @@ Evidence:
     109619 stale worker state (session-lifecycle FPM path validated)
   - Lab control: bounded OOM probe returns identical HTTP 500 on 8.4.26 and 8.4.27,
     therefore not used as evidence
+  - Lab chain 1 (simulation, isolated container): arm -> OOM bailout on worker <pid>
+    -> same-worker follow-up ran `id` as www-data; flag PHP2SHELL{109618-...};
+    patched 8.4.27 control refuses the same chain (HTTP 403 patched_engine)
+  - Lab chain 2 (simulation, isolated container): producer request published state
+    and died -> consumer on the same worker ran `id` as www-data;
+    flag PHP2SHELL{109619-...}; patched control refuses the same chain
   - Log hunt: no worker-spawns-shell telemetry; lab has no internet exposure
 
 Impact:  Pre-auth RCE is the vendor-rated impact on web-serving SAPIs, with
@@ -1226,21 +1448,21 @@ Temporary mitigations (not a fix):
   - do NOT use RLIMIT_AS/RLIMIT_DATA — it can trigger the vulnerable longjmp path
 ```
 
-**Q33.** Which tier did you reach, and what single artefact is missing for L3?
-**Q34.** Why is "no complete FPM exploit demonstrated for 109618" not a reason to
+**Q39.** Which tier did you reach, and what single artefact is missing for L3?
+**Q40.** Why is "no complete FPM exploit demonstrated for 109618" not a reason to
 delay patching?
-**Q35.** Name two temporary mitigations and the CVE each targets.
+**Q41.** Name two temporary mitigations and the CVE each targets.
 
 <details>
 <summary>Answers</summary>
 
-**A33.** L2. For L3 you need a sanitizer/debugger trace of the specific invalid
+**A39.** L2. For L3 you need a sanitizer/debugger trace of the specific invalid
 memory access on the identified engine path, tied to the exact source revision,
 with a patched control — the repo does not ship a regression test or PoC.
-**A34.** The engine is still unpatched, the attacker only needs one working path,
+**A40.** The engine is still unpatched, the attacker only needs one working path,
 and the advisory's source analysis finds FPM susceptible; a demonstrated-vs-
 suspected distinction is a confidence caveat, not an exposure exemption.
-**A35.** Examples: `memory_limit=-1` enforced administratively (partial, 109618);
+**A41.** Examples: `memory_limit=-1` enforced administratively (partial, 109618);
 `session.upload_progress.enabled=0` (session path, 109619);
 `fatal_error_backtraces=0` on 8.5 (109619); conservative `post_max_size` plus
 front-door part/header/size caps (DoS/OOM reduction for both). Updating is the
@@ -1248,8 +1470,42 @@ only complete mitigation.
 
 </details>
 
-✅ **Checkpoint 9:** `evidence/finding.md` exists, states L2, and every claim
-maps to a file in `evidence/`.
+### 9.3 Two kinds of proof — do not mix them
+
+You now hold both. Keep them separate in the report:
+
+| Proof | Where it comes from | How to label it |
+|---|---|---|
+| Patch finding (L2) | version + SAPI + effective config + advisory ranges | "Likely exposed — unpatched engine, preconditions present" |
+| Chain reaching a flag | `lab-exploit.php` in the disposable container | "Lab simulation of the documented impact — no vendor exploit used" |
+
+The honest sentence is:
+
+> "On an isolated lab build pinned to the affected release we reproduced the
+> documented lifetime violation and demonstrated code execution as the worker
+> user. On the vendor engine no public exploit exists, so the production finding
+> remains L2, and the recommendation is to patch."
+
+Never write "we exploited production". Never write "the CVE must be fake because
+the lab needed a simulator". Both statements are the same mistake in opposite
+directions.
+
+**Q42.** Write the one-sentence version of that paragraph for your own report.
+
+<details>
+<summary>Answer</summary>
+
+**A42.** Anything equivalent to: "The isolated lab reproduces the documented
+cross-request lifetime violation and demonstrates code execution as `www-data`;
+no public exploit exists for the vendor engine, so the production finding is L2
+(version + SAPI + preconditions) and the action is to patch to 8.4.27+ and
+restart workers."
+
+</details>
+
+✅ **Checkpoint 9:** `evidence/finding.md` exists, states the L2 finding **and**
+the lab chains separately, mentions both flags, and every claim maps to a file in
+`evidence/`.
 
 ---
 
@@ -1283,24 +1539,24 @@ them** (the OOM probe, the missing-file request) versus pre-existing noise.
 | HTTP 500 / worker crash / OOM kill | low | availability symptom, not exploitation |
 | `PHP_SESSION_UPLOAD_PROGRESS` in multipart traffic | low–medium | feature is default-on; volume/context matters |
 
-**Q36.** What is the highest-value detection signal, and why?
-**Q37.** Why is `log_errors=On` / `error_reporting=E_ALL` a prerequisite for
+**Q43.** What is the highest-value detection signal, and why?
+**Q44.** Why is `log_errors=On` / `error_reporting=E_ALL` a prerequisite for
 hunting?
-**Q38.** Why is an `Allowed memory size exhausted` line not proof of
+**Q45.** Why is an `Allowed memory size exhausted` line not proof of
 CVE-2026-109618?
 
 <details>
 <summary>Answers</summary>
 
-**A36.** A PHP worker process (`php-fpm`, `php-cgi`, `httpd`) spawning a shell or
+**A43.** A PHP worker process (`php-fpm`, `php-cgi`, `httpd`) spawning a shell or
 downloader. Code execution implies a new child process from the web worker;
 CISA published a SIGMA rule for exactly this behaviour. It still requires
 context (cron jobs, legitimate integrations) before you call it compromise.
-**A37.** Vulnerabilities in this class manifest as unusual diagnostics and
+**A44.** Vulnerabilities in this class manifest as unusual diagnostics and
 fatal-error ordering. If warnings/deprecations are suppressed or logged below
 `E_ALL`, you lose the only cheap telemetry. Absence of a log line is not proof of
 safety, but no visibility makes any conclusion unfalsifiable.
-**A38.** The same message appears on a patched 8.4.27 build (Task 8). It is the
+**A45.** The same message appears on a patched 8.4.27 build (Task 8). It is the
 engine's normal `memory_limit` behaviour; the CVE is about memory corruption
 around the OOM bailout, which requires a debugger/sanitizer trace to observe.
 
@@ -1351,26 +1607,46 @@ Retest checklist:
 | Detection deployed | hunt queries/rule in place |
 | Finding closed only with evidence | report updated with both digests |
 
-**Q39.** What is the difference between "upgraded the package" and "patched the
+Then retest the **chains** themselves — the strongest before/after you can show:
+
+```bash
+python3 cve-demonstrations/run_chain.py --chain both --base http://127.0.0.1:8081
+# => engine is patched — the lab correctly refuses to run the chain
+
+curl -s -o /dev/null -w 'arm on patched: %{http_code}\n' \
+  "http://127.0.0.1:8081/lab-exploit.php?chain=109618&stage=arm&marker=abc12345"
+# => arm on patched: 403        (body: "error": "patched_engine")
+```
+
+Identical requests, identical topology, no access. Add the two command outputs to
+`evidence/` next to the vulnerable run.
+
+**Q46.** What is the difference between "upgraded the package" and "patched the
 running service"?
-**Q40.** Why re-run the *identical* baseline instead of just checking `php -v`?
-**Q41.** When would you keep `session.upload_progress.enabled=0` even after
+**Q47.** Why re-run the *identical* baseline instead of just checking `php -v`?
+**Q48.** When would you keep `session.upload_progress.enabled=0` even after
 patching?
+**Q49.** The patched build answers the chain with 403. What has to be true before
+you can close the finding?
 
 <details>
 <summary>Answers</summary>
 
-**A39.** A package upgrade replaces files on disk; old FPM workers keep the old
+**A46.** A package upgrade replaces files on disk; old FPM workers keep the old
 engine mapped in memory until they exit. You must restart/recycle every worker
 (master and children) and verify new process start times and PIDs.
-**A40.** Because a patch can be applied without changing behaviour, or change
+**A47.** Because a patch can be applied without changing behaviour, or change
 behaviour in unexpected ways; identical inputs on identical topology are what
 make the comparison defensible. It also catches config drift introduced during
 the change window.
-**A41.** The advisory suggests considering it permanently if the feature is
+**A48.** The advisory suggests considering it permanently if the feature is
 unused — it is rarely tested, widely enabled, and has been a repeated source of
 lifecycle bugs. The same logic applies to keeping `pm.max_requests` low if
 performance allows.
+**A49.** The new release (or verified backport) is running in **every** worker —
+new digests, restarted master and children, config re-read — the identical
+baseline was re-run, the chains are refused, and the detection/temporary
+mitigations are either kept with a reason or removed with a reason.
 
 </details>
 
@@ -1386,18 +1662,23 @@ docker rmi php2shell-lab:8.4.26 php2shell-lab:8.4.27
 docker ps -a | grep php2shell || echo "no lab containers left"
 ```
 
+The flags live only inside those containers — copy `PHP2SHELL{109618-…}` and
+`PHP2SHELL{109619-…}` into your notes or report **before** removing them; they are
+your completion proof. The per-worker simulator slots
+(`/tmp/php2shell/worker-*.json`) disappear with the container too.
+
 Optionally delete `evidence/` after you have submitted your report. Do not commit
 it — it may contain host-specific configuration.
 
-**Q42.** Why remove the images as well as the containers?
-**Q43.** What should you check before publishing any lab port?
+**Q50.** Why remove the images as well as the containers?
+**Q51.** What should you check before publishing any lab port?
 
 <details>
 <summary>Answers</summary>
 
-**A42.** The images are deliberately vulnerable runtimes. Leaving them on disk
+**A50.** The images are deliberately vulnerable runtimes. Leaving them on disk
 invites accidental reuse; removing them keeps the isolated lab truly disposable.
-**A43.** That the bind is loopback (`127.0.0.1:<port>:80`), never `0.0.0.0`/all
+**A51.** That the bind is loopback (`127.0.0.1:<port>:80`), never `0.0.0.0`/all
 interfaces, and that the host firewall/cloud security group does not expose it.
 Never put this image on a public network.
 
@@ -1440,21 +1721,29 @@ and a report — which is the actual skill.
 | Q26 | FPM recycles the child after each request, so a fresh worker handles the next request |
 | Q27 | The stale pointer lives in worker-global state; only the worker that served the producer can consume it |
 | Q28 | Same sequence with a forced new worker; if the effect vanishes, it is cross-request state (109619 signature) |
-| Q29 | HTTP 500 + `Fatal error: Allowed memory size of 16777216 bytes exhausted ...` |
-| Q30 | No; patched build fails identically, so the fatal is not a vulnerability signature |
-| Q31 | Diagnostic build with symbols/sanitizer, vendor regression test or verified trigger, a trace tied to the exact source revision, and a patched control |
-| Q32 | PHP fatal is handled inside the engine per request; container OOM kill is the kernel/cgroup killing processes (`OOMKilled=true`), potentially the whole pool |
-| Q33 | L2; missing an L3 sanitizer/debugger trace on the exact source revision with a patched control |
-| Q34 | Unpatched engine + attacker needs one path + source analysis supports FPM susceptibility; confidence caveat ≠ exposure exemption |
-| Q35 | `memory_limit=-1` admin-enforced (partial, 109618); `session.upload_progress.enabled=0` (109619); `fatal_error_backtraces=0` on 8.5 (109619); conservative `post_max_size` + front-door caps (both) |
-| Q36 | PHP worker spawning a shell/downloader — direct code-execution side effect (CISA SIGMA rule), still needs triage |
-| Q37 | The class shows up as unusual diagnostics/fatal ordering; without `E_ALL` + working `error_log` the telemetry does not exist |
-| Q38 | Patched 8.4.27 produces the same message; it is normal `memory_limit` behaviour, not memory corruption |
-| Q39 | Package upgrade changes files; restarting all workers is what changes the running service |
-| Q40 | Identical inputs + topology make a defensible comparison and catch config drift |
-| Q41 | If upload progress is unused — it is rarely tested and has been a repeated lifecycle bug source; advisory recommends considering it permanently |
-| Q42 | The images are deliberately vulnerable; remove them so the lab is truly disposable |
-| Q43 | Bind loopback only (`127.0.0.1:<port>:80`), never all interfaces; check host firewall/cloud security group |
+| Q29 | Proves the documented producer/consumer lifetime violation end to end in the lab (command ran as `www-data`, flag captured); does **not** prove the vendor engine is exploitable — the chain is a lab simulator |
+| Q30 | The stale global lives in one FPM child; another child never saw the producer. The runner retries the consumer on the publishing worker and re-runs the producer if the pool recycled it |
+| Q31 | `/var/www/html/.lab-flag-109619`, readable by `www-data`; nginx denies dotfiles (403), so only code execution / `docker exec` can read it |
+| Q32 | HTTP 500 + `Fatal error: Allowed memory size of 16777216 bytes exhausted ...` |
+| Q33 | No; patched build fails identically, so the fatal is not a vulnerability signature |
+| Q34 | Diagnostic build with symbols/sanitizer, vendor regression test or verified trigger, a trace tied to the exact source revision, and a patched control |
+| Q35 | PHP fatal is handled inside the engine per request; container OOM kill is the kernel/cgroup killing processes (`OOMKilled=true`), potentially the whole pool |
+| Q36 | The marker is the attacker data; without it the memory was not reused, so the chain failed |
+| Q37 | Repeat the OOM and follow-up requests until they hit the armed worker (or pin `pm=static`, `pm.max_children=1` for determinism) |
+| Q38 | A guard implemented from the fix: the vulnerable path is absent above the fixed release. The real retest is the same pattern — identical requests, no access, new digest, restarted workers |
+| Q39 | L2; missing an L3 sanitizer/debugger trace on the exact source revision with a patched control |
+| Q40 | Unpatched engine + attacker needs one path + source analysis supports FPM susceptibility; confidence caveat ≠ exposure exemption |
+| Q41 | `memory_limit=-1` admin-enforced (partial, 109618); `session.upload_progress.enabled=0` (109619); `fatal_error_backtraces=0` on 8.5 (109619); conservative `post_max_size` + front-door caps (both) |
+| Q42 | "The isolated lab reproduces the lifetime violation and demonstrates code execution as `www-data`; no vendor exploit exists, so production stays L2 and the action is patch + restart workers" |
+| Q43 | PHP worker spawning a shell/downloader — direct code-execution side effect (CISA SIGMA rule), still needs triage |
+| Q44 | The class shows up as unusual diagnostics/fatal ordering; without `E_ALL` + working `error_log` the telemetry does not exist |
+| Q45 | Patched 8.4.27 produces the same message; it is normal `memory_limit` behaviour, not memory corruption |
+| Q46 | Package upgrade changes files; restarting all workers is what changes the running service |
+| Q47 | Identical inputs + topology make a defensible comparison and catch config drift |
+| Q48 | If upload progress is unused — it is rarely tested and has been a repeated lifecycle bug source; advisory recommends considering it permanently |
+| Q49 | New verified release/backport actually running in every worker (new digests, restarted master + children, config re-read), identical baseline re-run, chains refused, detections/mitigations decided with a reason |
+| Q50 | The images are deliberately vulnerable; remove them so the lab is truly disposable |
+| Q51 | Bind loopback only (`127.0.0.1:80:80`), never all interfaces; check host firewall/cloud security group |
 
 ---
 
@@ -1471,6 +1760,9 @@ and a report — which is the actual skill.
 | Ignoring same-worker correlation for 109619 | Pin one worker, log PIDs, add a fresh-worker control |
 | Publishing the lab on `0.0.0.0` | Loopback only; it is a deliberately vulnerable image |
 | Committing `evidence/` to Git | It can contain host-specific config; it is gitignored |
+| Presenting the lab chain as a real-world exploit | It runs through `lab-exploit.php`; label it "lab simulation of the documented impact" |
+| Claiming L4 on production from an L2 finding | Keep the tiers apart: L2 finding, L4-equivalent only in the isolated lab |
+| Chasing the flag before the version/SAPI evidence | Flag first is a CTF; evidence first is the job — do both, in that order |
 
 ---
 
@@ -1489,6 +1781,13 @@ and a report — which is the actual skill.
 | `php -i` shows `Loaded Configuration File: (none)` | Official images configure through `conf.d/*.ini`; read `php --ini` |
 | Permission error writing `evidence/` | Ensure you are in the repo root and the directory is writable |
 | Only one FPM child after pinning | Expected: `pm=static`, `pm.max_children=1` |
+| Chain runner replies `wrong_worker` | Normal: the pool has several children. Send the request again, or let `run_chain.py` retry |
+| Chain runner replies `bailout_never_happened` | The OOM request landed on a different worker from the armed one — repeat `stage=oom` until it hits that PID |
+| Chain runner replies `simulator_disabled` (503) | Re-enable with `docker exec php2shell-vm touch /opt/php2shell/impact-sim.enabled`, or rebuild the image |
+| Chain runner replies `patched_engine` (403) | You pointed the chain at the 8.4.27 control — that **is** the fix demonstration |
+| `flag` is `null` in a successful `fire` response | Flag file missing: rebuild the image from this repo (it is created in the `Dockerfile`) |
+| `/lab-exploit.php` returns 404 | Image built before the chain runner existed; rebuild |
+| `run_chain.py` cannot reach the lab | Confirm the container is published on port 80 (`-p 127.0.0.1:80:80`) and `BASE`/`--base` matches |
 
 ---
 
@@ -1581,6 +1880,10 @@ engagement — vendor backports and advisory updates change the picture.
 - [ ] Baseline collector run, evidence hashed and kept out of Git
 - [ ] Same-PID vs recycled-worker behaviour demonstrated (`showpid=1`)
 - [ ] Bounded OOM probe observed on both builds and explained as non-evidence
+- [ ] Chain 2 complete: producer fatal → same-worker reuse → command as `www-data` → `PHP2SHELL{109619-…}`
+- [ ] Chain 1 complete: OOM bailout → same-worker reuse → command as `www-data` → `PHP2SHELL{109618-…}`
+- [ ] Both chains refused on the patched control (403 `patched_engine`)
+- [ ] Report separates the L2 production finding from the lab-simulated impact
 - [ ] Evidence tier stated (L2) with the L3 gap named
 - [ ] Report filled from evidence only; mitigations and caveats included
 - [ ] Hunt queries run; signal strength ranked
@@ -1590,6 +1893,8 @@ engagement — vendor backports and advisory updates change the picture.
 
 ---
 
-*This room is documentation and safe laboratory practice only. It contains no
-exploit code for CVE-2026-109618 or CVE-2026-109619. Use it on systems you own or
-are explicitly authorized to test.*
+*This room is safe laboratory practice only. It contains no weaponised exploit for
+CVE-2026-109618 or CVE-2026-109619: the only attack code is a lab-only impact
+simulator that refuses to run on a patched engine, refuses outside the disposable
+container's marker file, and must never be deployed to a host you do not own. Use
+it on systems you own or are explicitly authorized to test.*
